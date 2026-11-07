@@ -205,6 +205,29 @@ func TestWriteRoutesRequireAllowedOriginAndSession(t *testing.T) {
 	}
 }
 
+func TestOriginAllowedCloudflareWildcardIsHTTPSAndHostBound(t *testing.T) {
+	allowed := map[string]struct{}{"https://*.trycloudflare.com": {}}
+	tests := []struct {
+		origin string
+		want   bool
+	}{
+		{origin: "https://dozens-years-alternatively-laboratory.trycloudflare.com", want: true},
+		{origin: "https://nested.tunnel.trycloudflare.com", want: true},
+		{origin: "http://dozens-years-alternatively-laboratory.trycloudflare.com", want: false},
+		{origin: "https://trycloudflare.com", want: false},
+		{origin: "https://tunnel.trycloudflare.com.attacker.test", want: false},
+		{origin: "https://tunnel.trycloudflare.com:8443", want: false},
+		{origin: "https://tunnel.trycloudflare.com/path", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.origin, func(t *testing.T) {
+			if got := originAllowed(test.origin, allowed); got != test.want {
+				t.Errorf("originAllowed(%q) = %t, want %t", test.origin, got, test.want)
+			}
+		})
+	}
+}
+
 func TestListingStorefrontFieldsAndPublicSellerProfile(t *testing.T) {
 	s, _ := newTestServer(t, nil)
 	cookie := createUserSession(t, s, "Market Seller", "market-seller@example.test")

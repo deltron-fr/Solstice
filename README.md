@@ -1,12 +1,12 @@
 # Pact
 
-Pact is a peer-to-peer marketplace for business products and services. The Go service owns marketplace records and verifies chain activity; an Anchor program will eventually custody and enforce escrowed token payments. Listings, conversations, profiles, and inventory stay off-chain.
+Pact is a peer-to-peer marketplace for business products and services. The Go service owns marketplace records and independently verifies Solana activity; an Anchor program holds and enforces eligible USDC escrow. Listings, conversations, profiles, and inventory stay off-chain.
 
 ## Repository layout
 
-- `frontend/` — React + strict TypeScript marketplace shell (Vite, npm).
+- `frontend/` — React + strict TypeScript commerce UI with wallet authentication, listings, orders, messages, and escrow transaction flows (Vite, npm).
 - `backend/` — Go HTTP API with wallet-signature sessions, SQLite migrations, sqlc-generated data access, marketplace workflows, and a finalized-RPC verification boundary.
-- `onchain/` — Anchor workspace with config initialization and explicit escrow instruction placeholders.
+- `onchain/` — Anchor workspace with config initialization, USDC escrow funding/release, timeout refunds, and explicitly deferred dispute/admin refund hooks.
 - `docs/` — architecture and local development notes.
 
 ## Prerequisites
@@ -27,14 +27,14 @@ make backend-run
 make frontend-dev
 ```
 
-The frontend currently displays typed mock marketplace data; the API foundation is independently available at `http://localhost:8080`.
+The frontend reads marketplace data from the API and falls back to visibly marked sample listings if the backend is unavailable. The API is available at `http://localhost:8080`; Vite proxies same-origin `/api` requests there.
 
 ## Common commands
 
 ```sh
 make backend-test       # Go unit and handler tests
 make backend-build
-make frontend-check     # ESLint and strict TypeScript check
+make frontend-check     # strict TypeScript, ESLint, and frontend unit tests
 make frontend-build
 make onchain-build      # Anchor build; requires pinned Anchor/Solana tools
 make onchain-test       # Anchor local-validator tests
@@ -45,6 +45,6 @@ make test               # backend + frontend checks; on-chain is separate
 
 ## Current scope
 
-The backend now implements wallet-authenticated profile creation, listing management, inventory-backed USDC orders, order state transitions, REST conversations/messages, and RPC-based payment verification/reconciliation. The UI still uses mock listings and its wallet integration does not yet build escrow transactions. The Anchor program only implements marketplace initialization; all escrow lifecycle instructions remain explicit `NotImplemented` placeholders and do not move tokens. As a result, the backend chain boundary is testable with fakes but real payments are not operational until the program is implemented, deployed, and verified.
+The backend implements wallet-authenticated profiles, listing management, inventory-backed USDC orders, conversations/messages, and finalized-RPC payment verification/reconciliation. The frontend supports those APIs and builds/simulates wallet-signed create/fund/release/timeout-refund transactions. The Anchor program's admin refund and dispute-resolution hooks intentionally remain `NotImplemented`. Real payments require matching local configuration, a deployed program, a supported Wallet Standard wallet/network, and backend RPC verification.
 
 See [architecture](docs/architecture.md), [on-chain design](docs/onchain-design.md), and [development guide](docs/development.md) before extending the scaffold.

@@ -25,7 +25,7 @@ The server applies the embedded goose migrations at startup. `sql/schema.sql` is
 
 ## Configuration
 
-See the root `.env.example`. The backend reads environment variables directly and does not load dotenv files. Set `PACT_ALLOWED_ORIGINS` to the exact browser origins that may make cookie-authenticated writes. For the Cloudflare tunnel frontend, add its current `https://…trycloudflare.com` origin. Set `PACT_COOKIE_SECURE=true` behind HTTPS. Use a devnet/localnet RPC URL and matching program ID/mint while developing.
+See the root `.env.example`. The backend reads environment variables directly and does not load dotenv files. Set `PACT_ALLOWED_ORIGINS` to the browser origins that may make cookie-authenticated writes. The `https://*.trycloudflare.com` entry allows any HTTPS Cloudflare quick-tunnel subdomain, which is convenient for temporary development URLs but unsafe for production; use explicit origins in deployed environments. Set `PACT_COOKIE_SECURE=true` behind HTTPS. Use a devnet/localnet RPC URL and matching program ID/mint while developing.
 
 Escrow-backed order creation is disabled unless `PACT_USDC_MINT` is configured to the accepted classic SPL Token mint. Listings use integer minor units: kobo for NGN, cents for USD, and micro-USDC for USDC. There is no implicit FX conversion.
 
@@ -56,4 +56,4 @@ Conversations and messages are participant-only REST resources intended for fron
 
 `GET /orders/{id}/payment` returns payment data, a stable 32-byte `chain_order_id`, the escrow PDA, accepted mint, amount, and expiry. The frontend prepares and wallet-signs Anchor transactions. It posts the transaction type and signature to `/orders/{id}/payment/transactions`; Pact independently reads the finalized transaction and escrow/vault accounts through Solana RPC. Pending signatures are stored for retry with bounded exponential backoff. Marketplace order state changes only after verified finalized state.
 
-Important limitation: the current Anchor escrow lifecycle instructions still return `NotImplemented`. Therefore real deposits, releases, refunds, and end-to-end chain verification are not operational until those instructions are implemented and deployed. The backend does not treat successful HTTP submission as proof of payment. Safe off-chain cancellation also depends on the deployed program enforcing the supplied expiry; do not deploy this backend as a custody product before the on-chain lifecycle is complete and reviewed.
+The implemented Anchor path supports create/fund/release and timeout refund, but administrator-controlled refunds and dispute resolution are not implemented. The backend does not treat successful HTTP submission as proof of payment. Safe off-chain cancellation depends on deploying the matching program and configuring the exact RPC URL, program ID, and mint; do not use this project scaffold for real-value custody without a security review.

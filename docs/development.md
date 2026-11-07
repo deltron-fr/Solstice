@@ -21,7 +21,7 @@ go test ./...
 
 The server applies embedded goose migrations at startup so a fresh local run initializes SQLite without a separate command. `make migrate-up` is useful for inspecting/operating migrations separately. Set `PACT_DATABASE_DSN`, `PACT_HTTP_ADDR`, `PACT_SOLANA_RPC_URL`, `PACT_SOLANA_PROGRAM_ID`, `PACT_USDC_MINT`, and `PACT_ALLOWED_ORIGINS` as documented in the root `.env.example`. For the Cloudflare tunnel UI, include its exact HTTPS origin in `PACT_ALLOWED_ORIGINS`; use `PACT_COOKIE_SECURE=true` for HTTPS deployment.
 
-Wallet sign-in requires browser requests to send an allowed `Origin`. The Vite `/api` proxy keeps local development same-origin; production should similarly serve/proxy the API under the UI origin. The backend's payment verifier and reconciliation worker are implemented, but real chain payments remain unavailable while the Anchor escrow instructions return `NotImplemented`.
+Wallet sign-in requires browser requests to send an allowed `Origin`. The Vite `/api` proxy keeps local development same-origin; production should similarly serve/proxy the API under the UI origin. Escrow initialization, funding, buyer release, and timeout refund are implemented in Anchor; administrator refund and dispute resolution remain explicit `NotImplemented` extension points. The backend only advances application payment/order state after independent finalized RPC verification.
 
 ## Frontend
 
@@ -33,7 +33,9 @@ npm run check
 npm run build
 ```
 
-The wallet foundation uses Solana Kit, `@solana/react`, and the Kit Wallet Standard plugin. It only discovers/connects browser wallets at this stage. A future payment flow will fetch order payment context from the Go API, build the Anchor transaction with the stable chain order ID and expiry, request wallet signing, submit through Kit/RPC, then post the signature to the API for independent finalized-state verification.
+The frontend uses Solana Kit, `@solana/react`, and the Kit Wallet Standard plugin. It signs one-time backend login challenges, uses the marketplace API for listings/orders/messages, and builds the current create/fund/release Anchor instructions locally. The browser simulates each transaction, requests wallet signing, submits through configured RPC, and posts the signature to the backend for independent finalized-state verification. The hand-encoded Anchor instruction builder is intentionally small and should be replaced by a generated Codama client when client generation is established.
+
+The frontend defaults to devnet because browser wallets commonly advertise devnet and may not advertise localnet. The backend example defaults to localnet. For a full payment test, configure both applications and the connected wallet for the same deployed program ID, RPC/network, and test mint: set `PACT_SOLANA_RPC_URL=https://api.devnet.solana.com` and the matching `PACT_USDC_MINT` for Go, and set `VITE_SOLANA_RPC_URL=https://api.devnet.solana.com`, `VITE_SOLANA_CLUSTER=devnet`, `VITE_SOLANA_PROGRAM_ID`, and `VITE_SOLANA_USDC_MINT` for Vite. Do not use a mainnet mint or real funds with this scaffold.
 
 ## On-chain
 

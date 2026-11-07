@@ -1,6 +1,6 @@
 # Pact on-chain program
 
-This is the Anchor workspace for the future token escrow program. It currently implements `initialize` only. Escrow instructions have account layouts and validation scaffolding but intentionally return `NotImplemented` without moving tokens.
+This is the Anchor workspace for Pact's token escrow. It implements configuration initialization, escrow creation, exact USDC funding, buyer-confirmed release, and timeout refunds. Administrator refunds and dispute resolution are explicit `NotImplemented` extension points; they do not move tokens.
 
 The toolchain is pinned in `Anchor.toml`: Anchor 1.2.2 and Solana/Agave 4.3.2. Install/select the project toolchain with AVM, then run:
 

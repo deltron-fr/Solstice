@@ -31,10 +31,12 @@ pub mod pact_escrow {
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(amount > 0, EscrowError::InvalidAmount);
-        require!(ctx.accounts.buyer.key() != ctx.accounts.seller.key(), EscrowError::BuyerAndSellerMustDiffer);
         require!(
-            funding_expires_at > now
-                && funding_expires_at <= now + FUNDING_WINDOW_SECONDS + 60,
+            ctx.accounts.buyer.key() != ctx.accounts.seller.key(),
+            EscrowError::BuyerAndSellerMustDiffer
+        );
+        require!(
+            funding_expires_at > now && funding_expires_at <= now + FUNDING_WINDOW_SECONDS + 60,
             EscrowError::InvalidFundingDeadline
         );
 
@@ -57,8 +59,14 @@ pub mod pact_escrow {
     pub fn fund_escrow(ctx: Context<FundEscrow>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let escrow = &ctx.accounts.escrow;
-        require!(escrow.status == EscrowStatus::Created, EscrowError::InvalidEscrowState);
-        require!(now <= escrow.funding_expires_at, EscrowError::FundingWindowExpired);
+        require!(
+            escrow.status == EscrowStatus::Created,
+            EscrowError::InvalidEscrowState
+        );
+        require!(
+            now <= escrow.funding_expires_at,
+            EscrowError::FundingWindowExpired
+        );
 
         let cpi_accounts = TransferChecked {
             from: ctx.accounts.buyer_token_account.to_account_info(),
@@ -82,7 +90,10 @@ pub mod pact_escrow {
     pub fn release_escrow(ctx: Context<ReleaseEscrow>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let escrow = &ctx.accounts.escrow;
-        require!(escrow.status == EscrowStatus::Funded, EscrowError::InvalidEscrowState);
+        require!(
+            escrow.status == EscrowStatus::Funded,
+            EscrowError::InvalidEscrowState
+        );
         require!(now <= escrow.expires_at, EscrowError::RefundWindowExpired);
 
         let order_id = escrow.order_id;
@@ -95,11 +106,8 @@ pub mod pact_escrow {
             to: ctx.accounts.seller_token_account.to_account_info(),
             authority: ctx.accounts.escrow.to_account_info(),
         };
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.key(),
-            cpi_accounts,
-            signer,
-        );
+        let cpi_ctx =
+            CpiContext::new_with_signer(ctx.accounts.token_program.key(), cpi_accounts, signer);
         token::transfer_checked(cpi_ctx, escrow.amount, ctx.accounts.token_mint.decimals)?;
         ctx.accounts.escrow.status = EscrowStatus::Released;
         Ok(())
@@ -121,7 +129,10 @@ pub mod pact_escrow {
         let escrow = &ctx.accounts.escrow;
         match escrow.status {
             EscrowStatus::Created => {
-                require!(now > escrow.funding_expires_at, EscrowError::EscrowNotExpired);
+                require!(
+                    now > escrow.funding_expires_at,
+                    EscrowError::EscrowNotExpired
+                );
             }
             EscrowStatus::Funded => {
                 require!(now > escrow.expires_at, EscrowError::EscrowNotExpired);

@@ -1,14 +1,15 @@
-export type ListingStatus = 'active' | 'paused' | 'sold_out';
+import type { ListingCurrency, ListingStatus } from '../lib/api/client';
 
 export interface Listing {
   id: string;
+  sellerId?: number;
   title: string;
   description: string;
   category: string;
   sellerName: string;
   location: string;
   price: number;
-  currency: 'NGN';
+  currency: ListingCurrency;
   unit: string;
   inventory: number;
   status: ListingStatus;

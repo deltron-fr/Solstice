@@ -10,6 +10,7 @@ export function AppLayout() {
           <NavLink to="/">Explore</NavLink>
           <NavLink to="/seller">For sellers</NavLink>
           <NavLink to="/orders">My orders</NavLink>
+          <NavLink to="/messages">Messages</NavLink>
         </nav>
         <div className="topbar-actions"><a className="text-link" href="#how-it-works">How it works</a><WalletButton /></div>
       </header>

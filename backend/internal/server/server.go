@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -107,12 +108,31 @@ func (s *Server) checkOrigin(next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, "origin_required", "a trusted browser origin is required")
 			return
 		}
-		if _, ok := allowed[origin]; !ok {
+		if !originAllowed(origin, allowed) {
 			writeError(w, http.StatusForbidden, "origin_not_allowed", "request origin is not allowed")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func originAllowed(origin string, allowed map[string]struct{}) bool {
+	if _, ok := allowed[origin]; ok {
+		return true
+	}
+	if _, wildcardEnabled := allowed["https://*.trycloudflare.com"]; !wildcardEnabled {
+		return false
+	}
+
+	parsed, err := url.Parse(origin)
+	if err != nil || !strings.EqualFold(parsed.Scheme, "https") || parsed.Opaque != "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return false
+	}
+	if port := parsed.Port(); port != "" && port != "443" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return strings.HasSuffix(host, ".trycloudflare.com") && len(host) > len(".trycloudflare.com")
 }
 
 func currentUser(r *http.Request) (data.User, bool) {
