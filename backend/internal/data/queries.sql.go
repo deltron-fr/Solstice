@@ -10,10 +10,117 @@ import (
 	"database/sql"
 )
 
+const cancelUnfundedOrder = `-- name: CancelUnfundedOrder :execrows
+UPDATE orders SET status = 'cancelled', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND buyer_id = ? AND status = 'pending_payment'
+`
+
+type CancelUnfundedOrderParams struct {
+	ID      int64 `json:"id"`
+	BuyerID int64 `json:"buyer_id"`
+}
+
+func (q *Queries) CancelUnfundedOrder(ctx context.Context, arg CancelUnfundedOrderParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelUnfundedOrder, arg.ID, arg.BuyerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const consumeAuthChallenge = `-- name: ConsumeAuthChallenge :execrows
+UPDATE auth_challenges SET consumed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE nonce = ? AND wallet_address = ? AND consumed_at IS NULL AND expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+`
+
+type ConsumeAuthChallengeParams struct {
+	Nonce         string `json:"nonce"`
+	WalletAddress string `json:"wallet_address"`
+}
+
+func (q *Queries) ConsumeAuthChallenge(ctx context.Context, arg ConsumeAuthChallengeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, consumeAuthChallenge, arg.Nonce, arg.WalletAddress)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const countRecentAuthChallenges = `-- name: CountRecentAuthChallenges :one
+SELECT count(*) FROM auth_challenges
+WHERE wallet_address = ? AND created_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-15 minutes')
+`
+
+func (q *Queries) CountRecentAuthChallenges(ctx context.Context, walletAddress string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRecentAuthChallenges, walletAddress)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createAuthChallenge = `-- name: CreateAuthChallenge :one
+INSERT INTO auth_challenges (wallet_address, nonce, message, expires_at)
+VALUES (?, ?, ?, ?)
+RETURNING id, wallet_address, nonce, message, expires_at, consumed_at, created_at
+`
+
+type CreateAuthChallengeParams struct {
+	WalletAddress string `json:"wallet_address"`
+	Nonce         string `json:"nonce"`
+	Message       string `json:"message"`
+	ExpiresAt     string `json:"expires_at"`
+}
+
+func (q *Queries) CreateAuthChallenge(ctx context.Context, arg CreateAuthChallengeParams) (AuthChallenge, error) {
+	row := q.db.QueryRowContext(ctx, createAuthChallenge,
+		arg.WalletAddress,
+		arg.Nonce,
+		arg.Message,
+		arg.ExpiresAt,
+	)
+	var i AuthChallenge
+	err := row.Scan(
+		&i.ID,
+		&i.WalletAddress,
+		&i.Nonce,
+		&i.Message,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createConversation = `-- name: CreateConversation :one
+INSERT INTO conversations (buyer_id, seller_id, order_id)
+VALUES (?, ?, ?)
+ON CONFLICT DO NOTHING
+RETURNING id, buyer_id, seller_id, order_id, created_at
+`
+
+type CreateConversationParams struct {
+	BuyerID  int64         `json:"buyer_id"`
+	SellerID int64         `json:"seller_id"`
+	OrderID  sql.NullInt64 `json:"order_id"`
+}
+
+func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error) {
+	row := q.db.QueryRowContext(ctx, createConversation, arg.BuyerID, arg.SellerID, arg.OrderID)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.BuyerID,
+		&i.SellerID,
+		&i.OrderID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const createListing = `-- name: CreateListing :one
-INSERT INTO listings (seller_id, title, description, price, currency, inventory_quantity, status)
-VALUES (?, ?, ?, ?, ?, ?, 'active')
-RETURNING id, seller_id, title, description, price, currency, inventory_quantity, status, created_at, updated_at
+INSERT INTO listings (seller_id, title, description, price, currency, category, unit, location, image_url, inventory_quantity, status)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, seller_id, title, description, price, currency, category, unit, location, image_url, inventory_quantity, status, created_at, updated_at
 `
 
 type CreateListingParams struct {
@@ -22,7 +129,12 @@ type CreateListingParams struct {
 	Description       string `json:"description"`
 	Price             int64  `json:"price"`
 	Currency          string `json:"currency"`
+	Category          string `json:"category"`
+	Unit              string `json:"unit"`
+	Location          string `json:"location"`
+	ImageUrl          string `json:"image_url"`
 	InventoryQuantity int64  `json:"inventory_quantity"`
+	Status            string `json:"status"`
 }
 
 func (q *Queries) CreateListing(ctx context.Context, arg CreateListingParams) (Listing, error) {
@@ -32,7 +144,12 @@ func (q *Queries) CreateListing(ctx context.Context, arg CreateListingParams) (L
 		arg.Description,
 		arg.Price,
 		arg.Currency,
+		arg.Category,
+		arg.Unit,
+		arg.Location,
+		arg.ImageUrl,
 		arg.InventoryQuantity,
+		arg.Status,
 	)
 	var i Listing
 	err := row.Scan(
@@ -42,10 +159,170 @@ func (q *Queries) CreateListing(ctx context.Context, arg CreateListingParams) (L
 		&i.Description,
 		&i.Price,
 		&i.Currency,
+		&i.Category,
+		&i.Unit,
+		&i.Location,
+		&i.ImageUrl,
 		&i.InventoryQuantity,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createMessage = `-- name: CreateMessage :one
+INSERT INTO messages (conversation_id, sender_id, content)
+VALUES (?, ?, ?)
+RETURNING id, conversation_id, sender_id, content, created_at
+`
+
+type CreateMessageParams struct {
+	ConversationID int64  `json:"conversation_id"`
+	SenderID       int64  `json:"sender_id"`
+	Content        string `json:"content"`
+}
+
+func (q *Queries) CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error) {
+	row := q.db.QueryRowContext(ctx, createMessage, arg.ConversationID, arg.SenderID, arg.Content)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.SenderID,
+		&i.Content,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createOrder = `-- name: CreateOrder :one
+INSERT INTO orders (buyer_id, seller_id, listing_id, quantity, unit_price, total_amount, chain_order_id)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, buyer_id, seller_id, listing_id, quantity, unit_price, total_amount, chain_order_id, status, created_at, updated_at
+`
+
+type CreateOrderParams struct {
+	BuyerID      int64  `json:"buyer_id"`
+	SellerID     int64  `json:"seller_id"`
+	ListingID    int64  `json:"listing_id"`
+	Quantity     int64  `json:"quantity"`
+	UnitPrice    int64  `json:"unit_price"`
+	TotalAmount  int64  `json:"total_amount"`
+	ChainOrderID []byte `json:"chain_order_id"`
+}
+
+func (q *Queries) CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error) {
+	row := q.db.QueryRowContext(ctx, createOrder,
+		arg.BuyerID,
+		arg.SellerID,
+		arg.ListingID,
+		arg.Quantity,
+		arg.UnitPrice,
+		arg.TotalAmount,
+		arg.ChainOrderID,
+	)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.BuyerID,
+		&i.SellerID,
+		&i.ListingID,
+		&i.Quantity,
+		&i.UnitPrice,
+		&i.TotalAmount,
+		&i.ChainOrderID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createPayment = `-- name: CreatePayment :one
+INSERT INTO payments (order_id, escrow_pda_address, amount, token_mint, status, expires_at)
+VALUES (?, ?, ?, ?, 'awaiting_signature', ?)
+RETURNING id, order_id, escrow_pda_address, transaction_signature, amount, token_mint, status, expires_at, created_at, updated_at
+`
+
+type CreatePaymentParams struct {
+	OrderID          int64          `json:"order_id"`
+	EscrowPdaAddress sql.NullString `json:"escrow_pda_address"`
+	Amount           int64          `json:"amount"`
+	TokenMint        string         `json:"token_mint"`
+	ExpiresAt        string         `json:"expires_at"`
+}
+
+func (q *Queries) CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error) {
+	row := q.db.QueryRowContext(ctx, createPayment,
+		arg.OrderID,
+		arg.EscrowPdaAddress,
+		arg.Amount,
+		arg.TokenMint,
+		arg.ExpiresAt,
+	)
+	var i Payment
+	err := row.Scan(
+		&i.ID,
+		&i.OrderID,
+		&i.EscrowPdaAddress,
+		&i.TransactionSignature,
+		&i.Amount,
+		&i.TokenMint,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createSession = `-- name: CreateSession :exec
+INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)
+`
+
+type CreateSessionParams struct {
+	TokenHash []byte `json:"token_hash"`
+	UserID    int64  `json:"user_id"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
+	_, err := q.db.ExecContext(ctx, createSession, arg.TokenHash, arg.UserID, arg.ExpiresAt)
+	return err
+}
+
+const createTransactionHistory = `-- name: CreateTransactionHistory :one
+INSERT INTO transaction_history (order_id, transaction_signature, transaction_type, status)
+VALUES (?, ?, ?, 'submitted')
+RETURNING id, order_id, transaction_signature, transaction_type, status, created_at
+`
+
+type CreateTransactionHistoryParams struct {
+	OrderID              int64  `json:"order_id"`
+	TransactionSignature string `json:"transaction_signature"`
+	TransactionType      string `json:"transaction_type"`
+}
+
+type CreateTransactionHistoryRow struct {
+	ID                   int64  `json:"id"`
+	OrderID              int64  `json:"order_id"`
+	TransactionSignature string `json:"transaction_signature"`
+	TransactionType      string `json:"transaction_type"`
+	Status               string `json:"status"`
+	CreatedAt            string `json:"created_at"`
+}
+
+func (q *Queries) CreateTransactionHistory(ctx context.Context, arg CreateTransactionHistoryParams) (CreateTransactionHistoryRow, error) {
+	row := q.db.QueryRowContext(ctx, createTransactionHistory, arg.OrderID, arg.TransactionSignature, arg.TransactionType)
+	var i CreateTransactionHistoryRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrderID,
+		&i.TransactionSignature,
+		&i.TransactionType,
+		&i.Status,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -75,8 +352,96 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const deleteExpiredChallenges = `-- name: DeleteExpiredChallenges :exec
+DELETE FROM auth_challenges WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') OR consumed_at IS NOT NULL
+`
+
+func (q *Queries) DeleteExpiredChallenges(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteExpiredChallenges)
+	return err
+}
+
+const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
+DELETE FROM sessions WHERE expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+`
+
+func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteExpiredSessions)
+	return err
+}
+
+const deleteSession = `-- name: DeleteSession :exec
+DELETE FROM sessions WHERE token_hash = ?
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, tokenHash []byte) error {
+	_, err := q.db.ExecContext(ctx, deleteSession, tokenHash)
+	return err
+}
+
+const getAuthChallenge = `-- name: GetAuthChallenge :one
+SELECT id, wallet_address, nonce, message, expires_at, consumed_at, created_at
+FROM auth_challenges WHERE nonce = ?
+`
+
+func (q *Queries) GetAuthChallenge(ctx context.Context, nonce string) (AuthChallenge, error) {
+	row := q.db.QueryRowContext(ctx, getAuthChallenge, nonce)
+	var i AuthChallenge
+	err := row.Scan(
+		&i.ID,
+		&i.WalletAddress,
+		&i.Nonce,
+		&i.Message,
+		&i.ExpiresAt,
+		&i.ConsumedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getConversation = `-- name: GetConversation :one
+SELECT id, buyer_id, seller_id, order_id, created_at FROM conversations WHERE id = ?
+`
+
+func (q *Queries) GetConversation(ctx context.Context, id int64) (Conversation, error) {
+	row := q.db.QueryRowContext(ctx, getConversation, id)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.BuyerID,
+		&i.SellerID,
+		&i.OrderID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getConversationBetween = `-- name: GetConversationBetween :one
+SELECT id, buyer_id, seller_id, order_id, created_at FROM conversations
+WHERE buyer_id = ? AND seller_id = ? AND order_id IS ?
+`
+
+type GetConversationBetweenParams struct {
+	BuyerID  int64         `json:"buyer_id"`
+	SellerID int64         `json:"seller_id"`
+	OrderID  sql.NullInt64 `json:"order_id"`
+}
+
+func (q *Queries) GetConversationBetween(ctx context.Context, arg GetConversationBetweenParams) (Conversation, error) {
+	row := q.db.QueryRowContext(ctx, getConversationBetween, arg.BuyerID, arg.SellerID, arg.OrderID)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.BuyerID,
+		&i.SellerID,
+		&i.OrderID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getListing = `-- name: GetListing :one
-SELECT id, seller_id, title, description, price, currency, inventory_quantity, status, created_at, updated_at
+SELECT id, seller_id, title, description, price, currency, category, unit, location, image_url, inventory_quantity, status, created_at, updated_at
 FROM listings WHERE id = ? AND status = 'active'
 `
 
@@ -90,6 +455,37 @@ func (q *Queries) GetListing(ctx context.Context, id int64) (Listing, error) {
 		&i.Description,
 		&i.Price,
 		&i.Currency,
+		&i.Category,
+		&i.Unit,
+		&i.Location,
+		&i.ImageUrl,
+		&i.InventoryQuantity,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getListingForUpdate = `-- name: GetListingForUpdate :one
+SELECT id, seller_id, title, description, price, currency, category, unit, location, image_url, inventory_quantity, status, created_at, updated_at
+FROM listings WHERE id = ?
+`
+
+func (q *Queries) GetListingForUpdate(ctx context.Context, id int64) (Listing, error) {
+	row := q.db.QueryRowContext(ctx, getListingForUpdate, id)
+	var i Listing
+	err := row.Scan(
+		&i.ID,
+		&i.SellerID,
+		&i.Title,
+		&i.Description,
+		&i.Price,
+		&i.Currency,
+		&i.Category,
+		&i.Unit,
+		&i.Location,
+		&i.ImageUrl,
 		&i.InventoryQuantity,
 		&i.Status,
 		&i.CreatedAt,
@@ -99,7 +495,7 @@ func (q *Queries) GetListing(ctx context.Context, id int64) (Listing, error) {
 }
 
 const getOrder = `-- name: GetOrder :one
-SELECT id, buyer_id, seller_id, listing_id, quantity, unit_price, total_amount, status, created_at, updated_at
+SELECT id, buyer_id, seller_id, listing_id, quantity, unit_price, total_amount, chain_order_id, status, created_at, updated_at
 FROM orders WHERE id = ?
 `
 
@@ -114,6 +510,37 @@ func (q *Queries) GetOrder(ctx context.Context, id int64) (Order, error) {
 		&i.Quantity,
 		&i.UnitPrice,
 		&i.TotalAmount,
+		&i.ChainOrderID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getOrderForUser = `-- name: GetOrderForUser :one
+SELECT id, buyer_id, seller_id, listing_id, quantity, unit_price, total_amount, chain_order_id, status, created_at, updated_at
+FROM orders WHERE id = ? AND (buyer_id = ? OR seller_id = ?)
+`
+
+type GetOrderForUserParams struct {
+	ID       int64 `json:"id"`
+	BuyerID  int64 `json:"buyer_id"`
+	SellerID int64 `json:"seller_id"`
+}
+
+func (q *Queries) GetOrderForUser(ctx context.Context, arg GetOrderForUserParams) (Order, error) {
+	row := q.db.QueryRowContext(ctx, getOrderForUser, arg.ID, arg.BuyerID, arg.SellerID)
+	var i Order
+	err := row.Scan(
+		&i.ID,
+		&i.BuyerID,
+		&i.SellerID,
+		&i.ListingID,
+		&i.Quantity,
+		&i.UnitPrice,
+		&i.TotalAmount,
+		&i.ChainOrderID,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -122,7 +549,7 @@ func (q *Queries) GetOrder(ctx context.Context, id int64) (Order, error) {
 }
 
 const getPaymentForOrder = `-- name: GetPaymentForOrder :one
-SELECT id, order_id, escrow_pda_address, transaction_signature, amount, token_mint, status, created_at, updated_at
+SELECT id, order_id, escrow_pda_address, transaction_signature, amount, token_mint, status, expires_at, created_at, updated_at
 FROM payments WHERE order_id = ?
 `
 
@@ -137,8 +564,73 @@ func (q *Queries) GetPaymentForOrder(ctx context.Context, orderID int64) (Paymen
 		&i.Amount,
 		&i.TokenMint,
 		&i.Status,
+		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getPublicUser = `-- name: GetPublicUser :one
+SELECT id, name, wallet_address FROM users WHERE id = ?
+`
+
+type GetPublicUserRow struct {
+	ID            int64          `json:"id"`
+	Name          string         `json:"name"`
+	WalletAddress sql.NullString `json:"wallet_address"`
+}
+
+func (q *Queries) GetPublicUser(ctx context.Context, id int64) (GetPublicUserRow, error) {
+	row := q.db.QueryRowContext(ctx, getPublicUser, id)
+	var i GetPublicUserRow
+	err := row.Scan(&i.ID, &i.Name, &i.WalletAddress)
+	return i, err
+}
+
+const getSessionUser = `-- name: GetSessionUser :one
+SELECT users.id, users.name, users.email, users.wallet_address, users.created_at
+FROM sessions JOIN users ON users.id = sessions.user_id
+WHERE sessions.token_hash = ? AND sessions.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+`
+
+func (q *Queries) GetSessionUser(ctx context.Context, tokenHash []byte) (User, error) {
+	row := q.db.QueryRowContext(ctx, getSessionUser, tokenHash)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.WalletAddress,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getTransactionHistoryBySignature = `-- name: GetTransactionHistoryBySignature :one
+SELECT id, order_id, transaction_signature, transaction_type, status, created_at
+FROM transaction_history WHERE transaction_signature = ?
+`
+
+type GetTransactionHistoryBySignatureRow struct {
+	ID                   int64  `json:"id"`
+	OrderID              int64  `json:"order_id"`
+	TransactionSignature string `json:"transaction_signature"`
+	TransactionType      string `json:"transaction_type"`
+	Status               string `json:"status"`
+	CreatedAt            string `json:"created_at"`
+}
+
+func (q *Queries) GetTransactionHistoryBySignature(ctx context.Context, transactionSignature string) (GetTransactionHistoryBySignatureRow, error) {
+	row := q.db.QueryRowContext(ctx, getTransactionHistoryBySignature, transactionSignature)
+	var i GetTransactionHistoryBySignatureRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrderID,
+		&i.TransactionSignature,
+		&i.TransactionType,
+		&i.Status,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -160,9 +652,26 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
+const getUserByWallet = `-- name: GetUserByWallet :one
+SELECT id, name, email, wallet_address, created_at FROM users WHERE wallet_address = ?
+`
+
+func (q *Queries) GetUserByWallet(ctx context.Context, walletAddress sql.NullString) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByWallet, walletAddress)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.WalletAddress,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const listActiveListings = `-- name: ListActiveListings :many
-SELECT id, seller_id, title, description, price, currency, inventory_quantity, status, created_at, updated_at
-FROM listings WHERE status = 'active' ORDER BY created_at DESC LIMIT ? OFFSET ?
+SELECT id, seller_id, title, description, price, currency, category, unit, location, image_url, inventory_quantity, status, created_at, updated_at
+FROM listings WHERE status = 'active' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
 `
 
 type ListActiveListingsParams struct {
@@ -186,6 +695,10 @@ func (q *Queries) ListActiveListings(ctx context.Context, arg ListActiveListings
 			&i.Description,
 			&i.Price,
 			&i.Currency,
+			&i.Category,
+			&i.Unit,
+			&i.Location,
+			&i.ImageUrl,
 			&i.InventoryQuantity,
 			&i.Status,
 			&i.CreatedAt,
@@ -204,22 +717,162 @@ func (q *Queries) ListActiveListings(ctx context.Context, arg ListActiveListings
 	return items, nil
 }
 
-const listOrdersForUser = `-- name: ListOrdersForUser :many
-SELECT id, buyer_id, seller_id, listing_id, quantity, unit_price, total_amount, status, created_at, updated_at
-FROM orders WHERE buyer_id = ? OR seller_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+const listConversationsForUser = `-- name: ListConversationsForUser :many
+SELECT id, buyer_id, seller_id, order_id, created_at FROM conversations
+WHERE buyer_id = ? OR seller_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
 `
 
-type ListOrdersForUserParams struct {
+type ListConversationsForUserParams struct {
 	BuyerID  int64 `json:"buyer_id"`
 	SellerID int64 `json:"seller_id"`
 	Limit    int64 `json:"limit"`
 	Offset   int64 `json:"offset"`
 }
 
+func (q *Queries) ListConversationsForUser(ctx context.Context, arg ListConversationsForUserParams) ([]Conversation, error) {
+	rows, err := q.db.QueryContext(ctx, listConversationsForUser,
+		arg.BuyerID,
+		arg.SellerID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Conversation
+	for rows.Next() {
+		var i Conversation
+		if err := rows.Scan(
+			&i.ID,
+			&i.BuyerID,
+			&i.SellerID,
+			&i.OrderID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listListingsForSeller = `-- name: ListListingsForSeller :many
+SELECT id, seller_id, title, description, price, currency, category, unit, location, image_url, inventory_quantity, status, created_at, updated_at
+FROM listings WHERE seller_id = ? ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`
+
+type ListListingsForSellerParams struct {
+	SellerID int64 `json:"seller_id"`
+	Limit    int64 `json:"limit"`
+	Offset   int64 `json:"offset"`
+}
+
+func (q *Queries) ListListingsForSeller(ctx context.Context, arg ListListingsForSellerParams) ([]Listing, error) {
+	rows, err := q.db.QueryContext(ctx, listListingsForSeller, arg.SellerID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Listing
+	for rows.Next() {
+		var i Listing
+		if err := rows.Scan(
+			&i.ID,
+			&i.SellerID,
+			&i.Title,
+			&i.Description,
+			&i.Price,
+			&i.Currency,
+			&i.Category,
+			&i.Unit,
+			&i.Location,
+			&i.ImageUrl,
+			&i.InventoryQuantity,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listMessages = `-- name: ListMessages :many
+SELECT id, conversation_id, sender_id, content, created_at FROM messages
+WHERE conversation_id = ? AND id < ? ORDER BY id DESC LIMIT ?
+`
+
+type ListMessagesParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	ID             int64 `json:"id"`
+	Limit          int64 `json:"limit"`
+}
+
+func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error) {
+	rows, err := q.db.QueryContext(ctx, listMessages, arg.ConversationID, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Message
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.SenderID,
+			&i.Content,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrdersForUser = `-- name: ListOrdersForUser :many
+SELECT id, buyer_id, seller_id, listing_id, quantity, unit_price, total_amount, chain_order_id, status, created_at, updated_at
+FROM orders WHERE (buyer_id = ? AND ? = 'buyer') OR (seller_id = ? AND ? = 'seller')
+ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`
+
+type ListOrdersForUserParams struct {
+	BuyerID  int64       `json:"buyer_id"`
+	Column2  interface{} `json:"column_2"`
+	SellerID int64       `json:"seller_id"`
+	Column4  interface{} `json:"column_4"`
+	Limit    int64       `json:"limit"`
+	Offset   int64       `json:"offset"`
+}
+
 func (q *Queries) ListOrdersForUser(ctx context.Context, arg ListOrdersForUserParams) ([]Order, error) {
 	rows, err := q.db.QueryContext(ctx, listOrdersForUser,
 		arg.BuyerID,
+		arg.Column2,
 		arg.SellerID,
+		arg.Column4,
 		arg.Limit,
 		arg.Offset,
 	)
@@ -238,6 +891,7 @@ func (q *Queries) ListOrdersForUser(ctx context.Context, arg ListOrdersForUserPa
 			&i.Quantity,
 			&i.UnitPrice,
 			&i.TotalAmount,
+			&i.ChainOrderID,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -253,4 +907,288 @@ func (q *Queries) ListOrdersForUser(ctx context.Context, arg ListOrdersForUserPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const listPendingTransactions = `-- name: ListPendingTransactions :many
+SELECT id, order_id, transaction_signature, transaction_type, status, verification_attempts, next_verification_at, last_verification_error, created_at
+FROM transaction_history WHERE status IN ('submitted', 'confirmed') AND next_verification_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ORDER BY id LIMIT ?
+`
+
+func (q *Queries) ListPendingTransactions(ctx context.Context, limit int64) ([]TransactionHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listPendingTransactions, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TransactionHistory
+	for rows.Next() {
+		var i TransactionHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrderID,
+			&i.TransactionSignature,
+			&i.TransactionType,
+			&i.Status,
+			&i.VerificationAttempts,
+			&i.NextVerificationAt,
+			&i.LastVerificationError,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markOrderFulfilling = `-- name: MarkOrderFulfilling :execrows
+UPDATE orders SET status = 'fulfilling', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND seller_id = ? AND status = 'paid'
+`
+
+type MarkOrderFulfillingParams struct {
+	ID       int64 `json:"id"`
+	SellerID int64 `json:"seller_id"`
+}
+
+func (q *Queries) MarkOrderFulfilling(ctx context.Context, arg MarkOrderFulfillingParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markOrderFulfilling, arg.ID, arg.SellerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const rejectTransactionVerification = `-- name: RejectTransactionVerification :exec
+UPDATE transaction_history SET status = 'failed', last_verification_error = ? WHERE transaction_signature = ? AND status IN ('submitted', 'confirmed')
+`
+
+type RejectTransactionVerificationParams struct {
+	LastVerificationError string `json:"last_verification_error"`
+	TransactionSignature  string `json:"transaction_signature"`
+}
+
+func (q *Queries) RejectTransactionVerification(ctx context.Context, arg RejectTransactionVerificationParams) error {
+	_, err := q.db.ExecContext(ctx, rejectTransactionVerification, arg.LastVerificationError, arg.TransactionSignature)
+	return err
+}
+
+const reserveListingInventory = `-- name: ReserveListingInventory :execrows
+UPDATE listings SET inventory_quantity = inventory_quantity - ?,
+    status = CASE WHEN inventory_quantity - ? = 0 THEN 'sold_out' ELSE status END,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND status = 'active' AND inventory_quantity >= ?
+`
+
+type ReserveListingInventoryParams struct {
+	InventoryQuantity   int64 `json:"inventory_quantity"`
+	InventoryQuantity_2 int64 `json:"inventory_quantity_2"`
+	ID                  int64 `json:"id"`
+	InventoryQuantity_3 int64 `json:"inventory_quantity_3"`
+}
+
+func (q *Queries) ReserveListingInventory(ctx context.Context, arg ReserveListingInventoryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, reserveListingInventory,
+		arg.InventoryQuantity,
+		arg.InventoryQuantity_2,
+		arg.ID,
+		arg.InventoryQuantity_3,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const restoreListingInventory = `-- name: RestoreListingInventory :exec
+UPDATE listings SET inventory_quantity = inventory_quantity + ?, status = 'active',
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?
+`
+
+type RestoreListingInventoryParams struct {
+	InventoryQuantity int64 `json:"inventory_quantity"`
+	ID                int64 `json:"id"`
+}
+
+func (q *Queries) RestoreListingInventory(ctx context.Context, arg RestoreListingInventoryParams) error {
+	_, err := q.db.ExecContext(ctx, restoreListingInventory, arg.InventoryQuantity, arg.ID)
+	return err
+}
+
+const scheduleTransactionRetry = `-- name: ScheduleTransactionRetry :exec
+UPDATE transaction_history
+SET verification_attempts = verification_attempts + 1, next_verification_at = ?, last_verification_error = ?
+WHERE transaction_signature = ? AND status IN ('submitted', 'confirmed')
+`
+
+type ScheduleTransactionRetryParams struct {
+	NextVerificationAt    string `json:"next_verification_at"`
+	LastVerificationError string `json:"last_verification_error"`
+	TransactionSignature  string `json:"transaction_signature"`
+}
+
+func (q *Queries) ScheduleTransactionRetry(ctx context.Context, arg ScheduleTransactionRetryParams) error {
+	_, err := q.db.ExecContext(ctx, scheduleTransactionRetry, arg.NextVerificationAt, arg.LastVerificationError, arg.TransactionSignature)
+	return err
+}
+
+const setOrderCompleted = `-- name: SetOrderCompleted :execrows
+UPDATE orders SET status = 'completed', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND status = 'fulfilling'
+`
+
+func (q *Queries) SetOrderCompleted(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setOrderCompleted, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setOrderPaid = `-- name: SetOrderPaid :execrows
+UPDATE orders SET status = 'paid', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND status = 'pending_payment'
+`
+
+func (q *Queries) SetOrderPaid(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setOrderPaid, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setOrderRefunded = `-- name: SetOrderRefunded :execrows
+UPDATE orders SET status = 'cancelled', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND status IN ('paid', 'fulfilling')
+`
+
+func (q *Queries) SetOrderRefunded(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setOrderRefunded, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const setPaymentFailed = `-- name: SetPaymentFailed :exec
+UPDATE payments SET status = 'failed', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE order_id = ? AND transaction_signature = ? AND status IN ('awaiting_signature', 'submitted', 'failed')
+`
+
+type SetPaymentFailedParams struct {
+	OrderID              int64          `json:"order_id"`
+	TransactionSignature sql.NullString `json:"transaction_signature"`
+}
+
+func (q *Queries) SetPaymentFailed(ctx context.Context, arg SetPaymentFailedParams) error {
+	_, err := q.db.ExecContext(ctx, setPaymentFailed, arg.OrderID, arg.TransactionSignature)
+	return err
+}
+
+const setPaymentStatus = `-- name: SetPaymentStatus :exec
+UPDATE payments SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE order_id = ?
+`
+
+type SetPaymentStatusParams struct {
+	Status  string `json:"status"`
+	OrderID int64  `json:"order_id"`
+}
+
+func (q *Queries) SetPaymentStatus(ctx context.Context, arg SetPaymentStatusParams) error {
+	_, err := q.db.ExecContext(ctx, setPaymentStatus, arg.Status, arg.OrderID)
+	return err
+}
+
+const setPaymentSubmitted = `-- name: SetPaymentSubmitted :exec
+UPDATE payments SET status = 'submitted', transaction_signature = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE order_id = ?
+`
+
+type SetPaymentSubmittedParams struct {
+	TransactionSignature sql.NullString `json:"transaction_signature"`
+	OrderID              int64          `json:"order_id"`
+}
+
+func (q *Queries) SetPaymentSubmitted(ctx context.Context, arg SetPaymentSubmittedParams) error {
+	_, err := q.db.ExecContext(ctx, setPaymentSubmitted, arg.TransactionSignature, arg.OrderID)
+	return err
+}
+
+const updateListing = `-- name: UpdateListing :one
+UPDATE listings
+SET title = ?, description = ?, price = ?, currency = ?, category = ?, unit = ?, location = ?, image_url = ?, inventory_quantity = ?, status = ?,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = ? AND seller_id = ?
+RETURNING id, seller_id, title, description, price, currency, category, unit, location, image_url, inventory_quantity, status, created_at, updated_at
+`
+
+type UpdateListingParams struct {
+	Title             string `json:"title"`
+	Description       string `json:"description"`
+	Price             int64  `json:"price"`
+	Currency          string `json:"currency"`
+	Category          string `json:"category"`
+	Unit              string `json:"unit"`
+	Location          string `json:"location"`
+	ImageUrl          string `json:"image_url"`
+	InventoryQuantity int64  `json:"inventory_quantity"`
+	Status            string `json:"status"`
+	ID                int64  `json:"id"`
+	SellerID          int64  `json:"seller_id"`
+}
+
+func (q *Queries) UpdateListing(ctx context.Context, arg UpdateListingParams) (Listing, error) {
+	row := q.db.QueryRowContext(ctx, updateListing,
+		arg.Title,
+		arg.Description,
+		arg.Price,
+		arg.Currency,
+		arg.Category,
+		arg.Unit,
+		arg.Location,
+		arg.ImageUrl,
+		arg.InventoryQuantity,
+		arg.Status,
+		arg.ID,
+		arg.SellerID,
+	)
+	var i Listing
+	err := row.Scan(
+		&i.ID,
+		&i.SellerID,
+		&i.Title,
+		&i.Description,
+		&i.Price,
+		&i.Currency,
+		&i.Category,
+		&i.Unit,
+		&i.Location,
+		&i.ImageUrl,
+		&i.InventoryQuantity,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateTransactionStatus = `-- name: UpdateTransactionStatus :exec
+UPDATE transaction_history SET status = ?, last_verification_error = '' WHERE transaction_signature = ?
+`
+
+type UpdateTransactionStatusParams struct {
+	Status               string `json:"status"`
+	TransactionSignature string `json:"transaction_signature"`
+}
+
+func (q *Queries) UpdateTransactionStatus(ctx context.Context, arg UpdateTransactionStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateTransactionStatus, arg.Status, arg.TransactionSignature)
+	return err
 }

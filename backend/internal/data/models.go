@@ -8,6 +8,16 @@ import (
 	"database/sql"
 )
 
+type AuthChallenge struct {
+	ID            int64          `json:"id"`
+	WalletAddress string         `json:"wallet_address"`
+	Nonce         string         `json:"nonce"`
+	Message       string         `json:"message"`
+	ExpiresAt     string         `json:"expires_at"`
+	ConsumedAt    sql.NullString `json:"consumed_at"`
+	CreatedAt     string         `json:"created_at"`
+}
+
 type Conversation struct {
 	ID        int64         `json:"id"`
 	BuyerID   int64         `json:"buyer_id"`
@@ -23,6 +33,10 @@ type Listing struct {
 	Description       string `json:"description"`
 	Price             int64  `json:"price"`
 	Currency          string `json:"currency"`
+	Category          string `json:"category"`
+	Unit              string `json:"unit"`
+	Location          string `json:"location"`
+	ImageUrl          string `json:"image_url"`
 	InventoryQuantity int64  `json:"inventory_quantity"`
 	Status            string `json:"status"`
 	CreatedAt         string `json:"created_at"`
@@ -38,16 +52,17 @@ type Message struct {
 }
 
 type Order struct {
-	ID          int64  `json:"id"`
-	BuyerID     int64  `json:"buyer_id"`
-	SellerID    int64  `json:"seller_id"`
-	ListingID   int64  `json:"listing_id"`
-	Quantity    int64  `json:"quantity"`
-	UnitPrice   int64  `json:"unit_price"`
-	TotalAmount int64  `json:"total_amount"`
-	Status      string `json:"status"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID           int64  `json:"id"`
+	BuyerID      int64  `json:"buyer_id"`
+	SellerID     int64  `json:"seller_id"`
+	ListingID    int64  `json:"listing_id"`
+	Quantity     int64  `json:"quantity"`
+	UnitPrice    int64  `json:"unit_price"`
+	TotalAmount  int64  `json:"total_amount"`
+	ChainOrderID []byte `json:"chain_order_id"`
+	Status       string `json:"status"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
 }
 
 type Payment struct {
@@ -58,17 +73,28 @@ type Payment struct {
 	Amount               int64          `json:"amount"`
 	TokenMint            string         `json:"token_mint"`
 	Status               string         `json:"status"`
+	ExpiresAt            string         `json:"expires_at"`
 	CreatedAt            string         `json:"created_at"`
 	UpdatedAt            string         `json:"updated_at"`
 }
 
+type Session struct {
+	TokenHash []byte `json:"token_hash"`
+	UserID    int64  `json:"user_id"`
+	ExpiresAt string `json:"expires_at"`
+	CreatedAt string `json:"created_at"`
+}
+
 type TransactionHistory struct {
-	ID                   int64  `json:"id"`
-	OrderID              int64  `json:"order_id"`
-	TransactionSignature string `json:"transaction_signature"`
-	TransactionType      string `json:"transaction_type"`
-	Status               string `json:"status"`
-	CreatedAt            string `json:"created_at"`
+	ID                    int64  `json:"id"`
+	OrderID               int64  `json:"order_id"`
+	TransactionSignature  string `json:"transaction_signature"`
+	TransactionType       string `json:"transaction_type"`
+	Status                string `json:"status"`
+	VerificationAttempts  int64  `json:"verification_attempts"`
+	NextVerificationAt    string `json:"next_verification_at"`
+	LastVerificationError string `json:"last_verification_error"`
+	CreatedAt             string `json:"created_at"`
 }
 
 type User struct {

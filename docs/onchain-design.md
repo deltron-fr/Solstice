@@ -2,7 +2,7 @@
 
 ## Toolchain
 
-The workspace pins Anchor CLI/framework 1.2.2 and Solana/Agave 4.1.2, the toolchain recommended in Anchor 1.2.2 release notes. Rust edition 2021 is used. Keep Anchor CLI, `anchor-lang`, `anchor-spl`, and the TypeScript Anchor client on the same 1.2.2 line.
+The workspace pins Anchor CLI/framework 1.2.2 and Solana/Agave 4.3.2. Rust edition 2021 is used. Keep Anchor CLI, `anchor-lang`, `anchor-spl`, and the TypeScript Anchor client on the same 1.2.2 line.
 
 ## Accounts and seeds
 

@@ -5,7 +5,7 @@ Pact is a peer-to-peer marketplace for business products and services. The Go se
 ## Repository layout
 
 - `frontend/` — React + strict TypeScript marketplace shell (Vite, npm).
-- `backend/` — Go HTTP API, SQLite migrations, and sqlc-generated data access.
+- `backend/` — Go HTTP API with wallet-signature sessions, SQLite migrations, sqlc-generated data access, marketplace workflows, and a finalized-RPC verification boundary.
 - `onchain/` — Anchor workspace with config initialization and explicit escrow instruction placeholders.
 - `docs/` — architecture and local development notes.
 
@@ -13,8 +13,8 @@ Pact is a peer-to-peer marketplace for business products and services. The Go se
 
 - Go 1.27.3 or newer in the Go 1.27 series.
 - Node.js 24 LTS and npm 11.
-- Rust stable; the on-chain app pins Anchor 1.2.2 and Solana/Agave 4.1.2. Install/select these using AVM as described in `docs/development.md`.
-- `sqlc` 1.31.1 and `goose` 3.27.0 for regeneration and migrations. Root Make targets invoke them by name.
+- Rust stable; the on-chain app pins Anchor 1.2.2 and Solana/Agave 4.3.2. Install/select these using AVM as described in `docs/development.md`.
+- `sqlc` 1.30.0 for regeneration and the goose 3.27.0 library for embedded migrations. `make migrate-up` additionally expects the goose CLI.
 
 The versions above reflect the scaffolded toolchain and the official compatibility notes checked for this project. Update the pins deliberately as a group.
 
@@ -45,6 +45,6 @@ make test               # backend + frontend checks; on-chain is separate
 
 ## Current scope
 
-This repository is a foundation, not a complete marketplace. User creation/read and listing creation/read/list are persistence-backed; listing updates, order, and payment routes are registered and return explicit `501` responses until their workflows are designed. The only implemented Anchor instruction initializes marketplace configuration. Escrow lifecycle instructions return an explicit `NotImplemented` error and do not move tokens.
+The backend now implements wallet-authenticated profile creation, listing management, inventory-backed USDC orders, order state transitions, REST conversations/messages, and RPC-based payment verification/reconciliation. The UI still uses mock listings and its wallet integration does not yet build escrow transactions. The Anchor program only implements marketplace initialization; all escrow lifecycle instructions remain explicit `NotImplemented` placeholders and do not move tokens. As a result, the backend chain boundary is testable with fakes but real payments are not operational until the program is implemented, deployed, and verified.
 
 See [architecture](docs/architecture.md), [on-chain design](docs/onchain-design.md), and [development guide](docs/development.md) before extending the scaffold.

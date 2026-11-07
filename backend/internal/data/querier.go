@@ -6,17 +6,57 @@ package data
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
+	CancelUnfundedOrder(ctx context.Context, arg CancelUnfundedOrderParams) (int64, error)
+	ConsumeAuthChallenge(ctx context.Context, arg ConsumeAuthChallengeParams) (int64, error)
+	CountRecentAuthChallenges(ctx context.Context, walletAddress string) (int64, error)
+	CreateAuthChallenge(ctx context.Context, arg CreateAuthChallengeParams) (AuthChallenge, error)
+	CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error)
 	CreateListing(ctx context.Context, arg CreateListingParams) (Listing, error)
+	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
+	CreateOrder(ctx context.Context, arg CreateOrderParams) (Order, error)
+	CreatePayment(ctx context.Context, arg CreatePaymentParams) (Payment, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) error
+	CreateTransactionHistory(ctx context.Context, arg CreateTransactionHistoryParams) (CreateTransactionHistoryRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteExpiredChallenges(ctx context.Context) error
+	DeleteExpiredSessions(ctx context.Context) error
+	DeleteSession(ctx context.Context, tokenHash []byte) error
+	GetAuthChallenge(ctx context.Context, nonce string) (AuthChallenge, error)
+	GetConversation(ctx context.Context, id int64) (Conversation, error)
+	GetConversationBetween(ctx context.Context, arg GetConversationBetweenParams) (Conversation, error)
 	GetListing(ctx context.Context, id int64) (Listing, error)
+	GetListingForUpdate(ctx context.Context, id int64) (Listing, error)
 	GetOrder(ctx context.Context, id int64) (Order, error)
+	GetOrderForUser(ctx context.Context, arg GetOrderForUserParams) (Order, error)
 	GetPaymentForOrder(ctx context.Context, orderID int64) (Payment, error)
+	GetPublicUser(ctx context.Context, id int64) (GetPublicUserRow, error)
+	GetSessionUser(ctx context.Context, tokenHash []byte) (User, error)
+	GetTransactionHistoryBySignature(ctx context.Context, transactionSignature string) (GetTransactionHistoryBySignatureRow, error)
 	GetUser(ctx context.Context, id int64) (User, error)
+	GetUserByWallet(ctx context.Context, walletAddress sql.NullString) (User, error)
 	ListActiveListings(ctx context.Context, arg ListActiveListingsParams) ([]Listing, error)
+	ListConversationsForUser(ctx context.Context, arg ListConversationsForUserParams) ([]Conversation, error)
+	ListListingsForSeller(ctx context.Context, arg ListListingsForSellerParams) ([]Listing, error)
+	ListMessages(ctx context.Context, arg ListMessagesParams) ([]Message, error)
 	ListOrdersForUser(ctx context.Context, arg ListOrdersForUserParams) ([]Order, error)
+	ListPendingTransactions(ctx context.Context, limit int64) ([]TransactionHistory, error)
+	MarkOrderFulfilling(ctx context.Context, arg MarkOrderFulfillingParams) (int64, error)
+	RejectTransactionVerification(ctx context.Context, arg RejectTransactionVerificationParams) error
+	ReserveListingInventory(ctx context.Context, arg ReserveListingInventoryParams) (int64, error)
+	RestoreListingInventory(ctx context.Context, arg RestoreListingInventoryParams) error
+	ScheduleTransactionRetry(ctx context.Context, arg ScheduleTransactionRetryParams) error
+	SetOrderCompleted(ctx context.Context, id int64) (int64, error)
+	SetOrderPaid(ctx context.Context, id int64) (int64, error)
+	SetOrderRefunded(ctx context.Context, id int64) (int64, error)
+	SetPaymentFailed(ctx context.Context, arg SetPaymentFailedParams) error
+	SetPaymentStatus(ctx context.Context, arg SetPaymentStatusParams) error
+	SetPaymentSubmitted(ctx context.Context, arg SetPaymentSubmittedParams) error
+	UpdateListing(ctx context.Context, arg UpdateListingParams) (Listing, error)
+	UpdateTransactionStatus(ctx context.Context, arg UpdateTransactionStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -2,7 +2,7 @@
 
 This is the Anchor workspace for the future token escrow program. It currently implements `initialize` only. Escrow instructions have account layouts and validation scaffolding but intentionally return `NotImplemented` without moving tokens.
 
-The toolchain is pinned in `Anchor.toml`: Anchor 1.2.2 and Solana/Agave 4.1.2. Install/select the project toolchain with AVM, then run:
+The toolchain is pinned in `Anchor.toml`: Anchor 1.2.2 and Solana/Agave 4.3.2. Install/select the project toolchain with AVM, then run:
 
 ```sh
 npm ci
