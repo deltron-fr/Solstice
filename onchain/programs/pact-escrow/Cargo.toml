@@ -1,0 +1,18 @@
+[package]
+name = "pact-escrow"
+version = "0.1.0"
+description = "Pact marketplace escrow program"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "pact_escrow"
+
+[features]
+no-entrypoint = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "=1.2.2"
+anchor-spl = { version = "=1.2.2", features = ["associated_token", "token"] }

@@ -1,0 +1,13 @@
+import { Link } from 'react-router-dom';
+import type { Listing } from '../../types/marketplace';
+
+interface ListingCardProps { listing: Listing }
+
+export function ListingCard({ listing }: ListingCardProps) {
+  return (
+    <article className="listing-card">
+      <Link to={`/listings/${listing.id}`} className="listing-image-link" aria-label={`View ${listing.title}`}><img src={listing.imageUrl} alt="" /><span className="listing-category">{listing.category}</span><span className="save-button" aria-hidden="true">♡</span></Link>
+      <div className="listing-info"><div className="seller-line"><span className="seller-avatar">{listing.sellerName.charAt(0)}</span><span>{listing.sellerName}</span><span className="verified" title="Verified business">✓</span></div><Link className="listing-title" to={`/listings/${listing.id}`}>{listing.title}</Link><p className="listing-location">⌖ &nbsp;{listing.location}</p><div className="listing-card-bottom"><p><strong>₦{listing.price.toLocaleString()}</strong><span> / {listing.unit}</span></p><span className="stock-label">{listing.inventory} available</span></div></div>
+    </article>
+  );
+}
