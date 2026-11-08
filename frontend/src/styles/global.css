@@ -17,7 +17,7 @@
 :root{
   --ink:#202a23;
   --green:#3f674e;
-  --muted:#737b72;
+  --muted:#49584c;
   --line:#e5e7df;
   --paper:#fffefa;
   --surface:#f7f7f2;
@@ -97,6 +97,28 @@ input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px soli
 .form-card input,.form-card textarea,.form-card select,.dialog-card input,.purchase-box input,.contact-box textarea,.message-compose textarea{border-color:#dfe3da;border-radius:8px;background:#fffefa}
 .service-notice,.success-notice,.form-error{border-radius:8px}
 .status-pill{border-radius:999px}
+
+/* Keep supporting copy readable on the light marketplace surfaces. */
+.eyebrow{color:#4c614d;font-size:11px}
+.hero-description,.hero-proof,.trust-strip,.footer,.detail-copy>p:not(.eyebrow),.detail-price small,.detail-note,.seller-placeholder>p:not(.eyebrow){color:var(--muted)}
+.hero-description,.detail-copy>p:not(.eyebrow),.seller-placeholder>p:not(.eyebrow){font-size:15px}
+.hero-proof,.trust-strip,.footer{font-size:12px}
+.detail-note{font-size:12px!important}
+.seller-line,.listing-location,.listing-card-bottom p,.stock-label,.form-help,.form-help p,.form-card label small,.seller-listing-copy>span,.order-facts dt,.escrow-summary,.escrow-summary code,.conversation-row small,.message-bubble time,.empty-state,.empty-state>span,.loading-state,.purchase-box small,.category-chip,.order-tabs button,.floating-note small,.seller-listings h2 span,.wallet-unavailable small{color:var(--muted)}
+.seller-line,.listing-location,.listing-card-bottom p,.form-help,.form-help p,.seller-listing-copy>span,.empty-state,.loading-state{font-size:12px}
+.stock-label,.form-card label small,.seller-listing-copy small,.order-facts dt,.empty-state>span,.purchase-box small,.floating-note small,.wallet-unavailable small{font-size:11px}
+.category-chip{font-size:12px}
+.form-card label,.dialog-card label,.purchase-box label,.contact-box label{font-size:12px}
+.order-facts dd,.conversation-row strong,.message-panel-heading{font-size:13px}
+.escrow-summary,.conversation-row small,.message-panel-heading a,.message-bubble time{font-size:12px}
+.message-bubble p,.message-compose textarea{font-size:13px}
+.status-pill{font-size:11px}
+.message-panel-heading{gap:12px;flex-wrap:wrap}
+.message-panel-heading a{overflow-wrap:anywhere}
+.conversation-row>span:last-child{min-width:0}
+.conversation-row small{overflow-wrap:anywhere}
+input,textarea,select{color:var(--ink)}
+input::placeholder,textarea::placeholder{color:#59665a;opacity:1}
 
 @media(hover:hover) and (pointer:fine){
   .listing-card:hover{transform:translateY(-4px);border-color:#d9e2d4;box-shadow:0 16px 34px #20382914}
