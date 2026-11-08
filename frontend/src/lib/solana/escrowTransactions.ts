@@ -5,6 +5,8 @@ import {
   compileTransaction,
   createSolanaRpc,
   createTransactionMessage,
+  estimateResourceLimitsFactory,
+  fillTransactionMessageProvisoryResourceLimits,
   getAddressEncoder,
   getBase64EncodedWireTransaction,
   getSignatureFromTransaction,
@@ -175,7 +177,13 @@ function createAssociatedTokenAccountIdempotent(payer: Address, owner: Address, 
   };
 }
 
-export async function buildEscrowTransaction(action: EscrowAction, order: OrderResponse, payment: PaymentResponse, buyerAddress: string, sellerAddress: string): Promise<Transaction> {
+export async function buildEscrowTransaction(
+  action: EscrowAction,
+  order: OrderResponse,
+  payment: PaymentResponse,
+  buyerAddress: string,
+  sellerAddress: string,
+): Promise<Transaction> {
   const buyer = address(buyerAddress);
   const seller = address(sellerAddress);
   const mint = address(payment.payment.token_mint);
@@ -214,30 +222,43 @@ export async function buildEscrowTransaction(action: EscrowAction, order: OrderR
     instructions.push(await refundAfterTimeoutInstruction(buyer, mint, escrow, vault, buyerToken));
   }
 
-  const message = appendTransactionMessageInstructions(
+  const draft = fillTransactionMessageProvisoryResourceLimits(appendTransactionMessageInstructions(
     instructions,
-    setTransactionMessageConfig(
-      { computeUnitLimit: 600_000, loadedAccountsDataSizeLimit: 64_000 },
-      setTransactionMessageLifetimeUsingBlockhash(latestBlockhash.value, setTransactionMessageFeePayer(buyer, createTransactionMessage({ version: 1 }))),
-    ),
+    setTransactionMessageLifetimeUsingBlockhash(latestBlockhash.value, setTransactionMessageFeePayer(buyer, createTransactionMessage({ version: 1 }))),
+  ));
+  const estimate = await estimateResourceLimitsFactory({ rpc })(draft);
+  const dataPage = 32 * 1024;
+  const computeUnitLimit = Math.min(1_400_000, Math.ceil(estimate.computeUnitLimit * 1.2) + 10_000);
+  const loadedAccountsDataSizeLimit = Math.min(
+    64 * 1024 * 1024,
+    Math.ceil((estimate.loadedAccountsDataSizeLimit + dataPage) / dataPage) * dataPage,
   );
+  const message = setTransactionMessageConfig({ computeUnitLimit, loadedAccountsDataSizeLimit }, draft);
   return compileTransaction(message);
 }
 
-export async function simulateAndSubmit(transaction: Transaction, signWithWallet: (bytes: ReadonlyUint8Array) => Promise<ReadonlyUint8Array>): Promise<string> {
+export async function simulateAndSubmit(
+  transaction: Transaction,
+  signWithWallet: (bytes: ReadonlyUint8Array) => Promise<ReadonlyUint8Array>,
+  onStage?: (stage: 'wallet' | 'submit') => void,
+): Promise<string> {
   const encoded = getBase64EncodedWireTransaction(transaction);
   const simulation = await rpc.simulateTransaction(encoded, {
     encoding: 'base64', commitment: 'confirmed', sigVerify: false, replaceRecentBlockhash: true,
   }).send();
   if (simulation.value.err !== null) {
-    const detail = simulation.value.logs?.filter((line) => line.includes('Error') || line.includes('failed')).join(' ') ?? 'The transaction did not pass simulation.';
+    const matchingLogs = simulation.value.logs?.filter((line) => line.includes('Error') || line.includes('failed')) ?? [];
+    const simulationError = JSON.stringify(simulation.value.err, (_, value: unknown) => typeof value === 'bigint' ? value.toString() : value);
+    const detail = matchingLogs.join(' ') || `Transaction simulation failed: ${simulationError}`;
     throw new Error(detail);
   }
 
   const serialized = getTransactionEncoder().encode(transaction);
+  onStage?.('wallet');
   const walletSigned = await signWithWallet(serialized);
   const signedTransaction = getTransactionDecoder().decode(walletSigned);
   const signature = getSignatureFromTransaction(signedTransaction);
+  onStage?.('submit');
   await rpc.sendTransaction(getBase64EncodedWireTransaction(signedTransaction), {
     encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3n,
   }).send();

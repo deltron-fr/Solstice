@@ -14,6 +14,26 @@ type createConversationRequest struct {
 	OrderID  *int64 `json:"order_id"`
 }
 
+type conversationResponse struct {
+	ID        int64  `json:"id"`
+	BuyerID   int64  `json:"buyer_id"`
+	SellerID  int64  `json:"seller_id"`
+	OrderID   *int64 `json:"order_id"`
+	CreatedAt string `json:"created_at"`
+}
+
+func presentConversation(conversation data.Conversation) conversationResponse {
+	response := conversationResponse{
+		ID: conversation.ID, BuyerID: conversation.BuyerID, SellerID: conversation.SellerID,
+		CreatedAt: conversation.CreatedAt,
+	}
+	if conversation.OrderID.Valid {
+		orderID := conversation.OrderID.Int64
+		response.OrderID = &orderID
+	}
+	return response
+}
+
 func (s *Server) createConversation(w http.ResponseWriter, r *http.Request) {
 	user, _ := currentUser(r)
 	var input createConversationRequest
@@ -58,7 +78,7 @@ func (s *Server) createConversation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusCreated, conversation)
+	writeJSON(w, http.StatusCreated, presentConversation(conversation))
 }
 
 func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
@@ -80,10 +100,11 @@ func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "list conversations", err)
 		return
 	}
-	if conversations == nil {
-		conversations = []data.Conversation{}
+	response := make([]conversationResponse, 0, len(conversations))
+	for _, conversation := range conversations {
+		response = append(response, presentConversation(conversation))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"conversations": conversations, "limit": limit, "offset": offset})
+	writeJSON(w, http.StatusOK, map[string]any{"conversations": response, "limit": limit, "offset": offset})
 }
 
 func (s *Server) listMessages(w http.ResponseWriter, r *http.Request) {

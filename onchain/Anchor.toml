@@ -14,7 +14,7 @@ pact_escrow = "GDSz1GPfxqK5yioYqQRbubENibvvaZDkkcRYDzkhzG4A"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

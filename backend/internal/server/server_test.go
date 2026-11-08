@@ -313,10 +313,18 @@ func TestConversationMessagesAreParticipantOnly(t *testing.T) {
 		t.Fatalf("create conversation status %d: %s", conversationResponse.Code, conversationResponse.Body.String())
 	}
 	var conversation struct {
-		ID int64 `json:"id"`
+		ID      int64  `json:"id"`
+		OrderID *int64 `json:"order_id"`
 	}
 	if err := json.Unmarshal(conversationResponse.Body.Bytes(), &conversation); err != nil {
 		t.Fatal(err)
+	}
+	if conversation.OrderID != nil {
+		t.Fatalf("new marketplace conversation order_id = %d, want null", *conversation.OrderID)
+	}
+	listResponse := serve(s, http.MethodGet, "/conversations", "", buyerCookie)
+	if listResponse.Code != http.StatusOK || !strings.Contains(listResponse.Body.String(), `"order_id":null`) {
+		t.Fatalf("list conversations response should expose nullable order_id as JSON null: %d %s", listResponse.Code, listResponse.Body.String())
 	}
 	message := serve(s, http.MethodPost, "/conversations/"+itoa(conversation.ID)+"/messages", `{"content":"Hello, is this available?"}`, buyerCookie)
 	if message.Code != http.StatusCreated {

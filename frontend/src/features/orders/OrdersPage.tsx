@@ -29,6 +29,7 @@ function PaymentAction({ row, connected, buyerAddress, sellerAddress, onComplete
 }) {
   const signTransaction = useSignTransaction(connected.account, walletChain);
   const [working, setWorking] = useState(false);
+  const [phase, setPhase] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -42,10 +43,17 @@ function PaymentAction({ row, connected, buyerAddress, sellerAddress, onComplete
       setError('This wallet does not currently support Solana transaction v1, required for this payment transaction.');
       return;
     }
-    setWorking(true); setError(null); setStatus(null);
+    setWorking(true); setPhase('Estimating transaction resources…'); setError(null); setStatus(null);
     try {
       const transaction = await buildEscrowTransaction(action, row.order, row.payment, buyerAddress, sellerAddress);
-      const signature = await simulateAndSubmit(transaction, async (bytes) => (await signTransaction({ transaction: new Uint8Array(bytes) })).signedTransaction);
+      setPhase('Checking transaction…');
+      const signature = await simulateAndSubmit(
+        transaction,
+        async (bytes) => (await signTransaction({ transaction: new Uint8Array(bytes) })).signedTransaction,
+        (stage) => {
+          setPhase(stage === 'wallet' ? 'Check your wallet and approve the transaction…' : 'Submitting approved transaction…');
+        },
+      );
       setStatus(`Transaction submitted: ${signature}. Checking finalized escrow state…`);
       try {
         const result = await api.submitPaymentTransaction(row.order.id, action, signature);
@@ -61,16 +69,16 @@ function PaymentAction({ row, connected, buyerAddress, sellerAddress, onComplete
       }
       onComplete();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'The escrow transaction failed.');
-    } finally { setWorking(false); }
+      setError(reason instanceof Error && reason.message ? reason.message : 'The escrow transaction failed.');
+    } finally { setWorking(false); setPhase(''); }
   }
 
   return <div className="payment-actions">
-    {row.order.status === 'pending_payment' && row.payment?.escrow_state?.status !== 'funded' && <button className="button button-dark" type="button" disabled={working || row.payment === null} onClick={() => { void run('fund'); }}>{working ? 'Waiting for wallet…' : 'Pay securely with USDC'}</button>}
+    {row.order.status === 'pending_payment' && row.payment?.escrow_state?.status !== 'funded' && <button className="button button-dark" type="button" disabled={working || row.payment === null} onClick={() => { void run('fund'); }}>{working ? phase || 'Processing payment…' : 'Pay securely with USDC'}</button>}
     {row.order.status === 'pending_payment' && row.payment?.escrow_state?.status === 'funded' && <p className="detail-note">Payment is secured on-chain; Pact is updating the order status.</p>}
-    {row.order.status === 'fulfilling' && row.payment?.escrow_state?.status === 'funded' && <button className="button button-dark" type="button" disabled={working} onClick={() => { void run('release'); }}>{working ? 'Waiting for wallet…' : 'Confirm receipt & release'}</button>}
+    {row.order.status === 'fulfilling' && row.payment?.escrow_state?.status === 'funded' && <button className="button button-dark" type="button" disabled={working} onClick={() => { void run('release'); }}>{working ? phase || 'Processing transaction…' : 'Confirm receipt & release'}</button>}
     {row.order.status === 'fulfilling' && row.payment?.escrow_state?.status !== 'funded' && <p className="detail-note">Pact is refreshing escrow state before enabling release.</p>}
-    {row.payment?.escrow_state?.status === 'funded' && row.payment.escrow_state.expires_at <= Math.floor(Date.now() / 1000) && <button className="button button-outline" type="button" disabled={working} onClick={() => { void run('refund'); }}>{working ? 'Waiting for wallet…' : 'Refund after timeout'}</button>}
+    {row.payment?.escrow_state?.status === 'funded' && row.payment.escrow_state.expires_at <= Math.floor(Date.now() / 1000) && <button className="button button-outline" type="button" disabled={working} onClick={() => { void run('refund'); }}>{working ? phase || 'Processing transaction…' : 'Refund after timeout'}</button>}
     {error !== null && <p className="form-error" role="alert">{error}</p>}
     {status !== null && <p className="success-notice" role="status">{status}</p>}
   </div>;

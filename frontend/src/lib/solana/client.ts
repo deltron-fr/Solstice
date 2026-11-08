@@ -4,7 +4,8 @@ import { walletSigner } from '@solana/kit-plugin-wallet';
 import { useClient } from '@solana/react';
 import { toSolanaChainIdentifier } from './chain';
 
-export const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
+const configuredRpcUrl = import.meta.env.VITE_SOLANA_RPC_URL?.trim() || 'https://api.devnet.solana.com';
+export const rpcUrl = new URL(configuredRpcUrl, window.location.origin).toString();
 export const walletChain = toSolanaChainIdentifier(import.meta.env.VITE_SOLANA_CLUSTER);
 
 export const solanaClient = createClient()
