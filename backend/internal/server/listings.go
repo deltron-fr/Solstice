@@ -5,9 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
-	"github.com/pact-marketplace/pact/backend/internal/data"
+	"github.com/deltron-fr/solstice/backend/internal/data"
 )
 
 type createListingRequest struct {
@@ -47,7 +48,7 @@ func (s *Server) createListing(w http.ResponseWriter, r *http.Request) {
 		input.Unit = "item"
 	}
 	if !validListingFields(input.Title, input.Description, input.Price, input.Currency, input.Category, input.Unit, input.Location, input.ImageURL, input.InventoryQuantity) {
-		writeError(w, http.StatusBadRequest, "validation_error", "listing fields are invalid; image_url must be an HTTPS URL")
+		writeError(w, http.StatusBadRequest, "validation_error", "listing fields are invalid; image_url must be an HTTPS URL or a Solstice image upload path")
 		return
 	}
 	status := "active"
@@ -238,9 +239,14 @@ func validListingFields(title, description string, price int64, currency, catego
 	if imageURL == "" {
 		return true
 	}
+	if strings.HasPrefix(imageURL, "/uploads/") {
+		return uploadedImageName.MatchString(strings.TrimPrefix(imageURL, "/uploads/"))
+	}
 	parsed, err := url.ParseRequestURI(imageURL)
 	return err == nil && parsed.Scheme == "https" && parsed.Host != "" && parsed.User == nil
 }
+
+var uploadedImageName = regexp.MustCompile(`^[a-f0-9]{32}\.(jpg|png|webp)$`)
 
 type publicUserResponse struct {
 	ID            int64   `json:"id"`

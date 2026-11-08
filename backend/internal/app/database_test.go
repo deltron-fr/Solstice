@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/pact-marketplace/pact/backend/migrations"
+	"github.com/deltron-fr/solstice/backend/migrations"
 	"github.com/pressly/goose/v3"
 )
 

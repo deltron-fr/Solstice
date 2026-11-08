@@ -115,11 +115,12 @@ export class ApiRequestError extends Error {
 }
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
+const normalizedApiBaseUrl = apiBaseUrl.replace(/\/$/, '');
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers, credentials: 'include' });
+  if (init.body !== undefined && !(init.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  const response = await fetch(`${normalizedApiBaseUrl}${path}`, { ...init, headers, credentials: 'include' });
   if (!response.ok) {
     let body: ApiErrorBody = { error: 'request_failed', message: 'The request could not be completed' };
     try {
@@ -160,6 +161,11 @@ export const api = {
   },
   getListing: (id: number) => request<ListingResponse>(`/listings/${id}`),
   listMyListings: () => request<ListingListResponse>('/listings/mine'),
+  uploadImage: (image: File) => {
+    const body = new FormData();
+    body.append('image', image);
+    return request<{ image_url: string }>('/uploads', { method: 'POST', body });
+  },
   getPublicUser: (id: number) => request<PublicUserResponse>(`/public/users/${id}`),
   createListing: (input: Omit<ListingResponse, 'id' | 'seller_id' | 'status' | 'created_at' | 'updated_at'>) =>
     request<ListingResponse>('/listings', { method: 'POST', body: jsonBody(input) }),
@@ -186,3 +192,8 @@ export const api = {
     method: 'POST', body: jsonBody({ content }),
   }),
 };
+
+export function imageSource(imagePath: string): string {
+  if (imagePath.startsWith('/uploads/')) return `${normalizedApiBaseUrl}${imagePath}`;
+  return imagePath;
+}

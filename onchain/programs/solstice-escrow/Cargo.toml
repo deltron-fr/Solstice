@@ -1,12 +1,12 @@
 [package]
-name = "pact-escrow"
+name = "solstice-escrow"
 version = "0.1.0"
-description = "Pact marketplace escrow program"
+description = "Solstice marketplace escrow program"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "pact_escrow"
+name = "solstice_escrow"
 
 [features]
 no-entrypoint = []

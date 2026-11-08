@@ -9,6 +9,7 @@ node_modules/
 frontend/dist/
 frontend/coverage/
 backend/bin/
+backend/var/uploads/
 backend/coverage.out
 backend/sqlc.yaml.tmp
 onchain/target/

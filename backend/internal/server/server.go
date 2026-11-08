@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pact-marketplace/pact/backend/internal/blockchain"
-	"github.com/pact-marketplace/pact/backend/internal/config"
-	"github.com/pact-marketplace/pact/backend/internal/data"
+	"github.com/deltron-fr/solstice/backend/internal/blockchain"
+	"github.com/deltron-fr/solstice/backend/internal/config"
+	"github.com/deltron-fr/solstice/backend/internal/data"
 )
 
 type Server struct {
@@ -41,6 +41,8 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("GET /users/{id}", s.protected(http.HandlerFunc(s.getUser)))
 	mux.HandleFunc("GET /public/users/{id}", s.getPublicUser)
 	mux.HandleFunc("GET /listings", s.listListings)
+	mux.HandleFunc("GET /uploads/{filename}", s.getUploadedImage)
+	mux.Handle("POST /uploads", s.writeProtected(http.HandlerFunc(s.uploadImage)))
 	mux.Handle("GET /listings/mine", s.protected(http.HandlerFunc(s.listSellerListings)))
 	mux.HandleFunc("GET /listings/{id}", s.getListing)
 	mux.Handle("POST /listings", s.writeProtected(http.HandlerFunc(s.createListing)))

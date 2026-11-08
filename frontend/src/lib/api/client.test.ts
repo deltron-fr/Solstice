@@ -3,7 +3,7 @@ import { api, ApiRequestError } from './client';
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('Pact API client', () => {
+describe('Solstice API client', () => {
   it('sends order creation with same-origin credentials', async () => {
     const order = {
       id: 1, buyer_id: 2, seller_id: 3, listing_id: 4, quantity: 1,

@@ -93,7 +93,7 @@ func NewRPCClient(config Config) *RPCClient {
 
 func (c *RPCClient) DeriveEscrowAddress(orderID [32]byte) (string, error) {
 	if !c.programOK {
-		return "", errors.New("PACT_SOLANA_PROGRAM_ID is not a valid Solana address")
+		return "", errors.New("SOLSTICE_SOLANA_PROGRAM_ID is not a valid Solana address")
 	}
 	address, _, err := solana.FindProgramAddress([][]byte{[]byte(EscrowSeed), orderID[:]}, c.program)
 	if err != nil {
@@ -104,7 +104,7 @@ func (c *RPCClient) DeriveEscrowAddress(orderID [32]byte) (string, error) {
 
 func (c *RPCClient) VerifyTransaction(ctx context.Context, signature string, expected Expectation) (Verification, error) {
 	if !c.programOK {
-		return Verification{}, errors.New("PACT_SOLANA_PROGRAM_ID is not a valid Solana address")
+		return Verification{}, errors.New("SOLSTICE_SOLANA_PROGRAM_ID is not a valid Solana address")
 	}
 	sig, err := solana.SignatureFromBase58(signature)
 	if err != nil {
@@ -162,7 +162,7 @@ func (c *RPCClient) VerifyTransaction(ctx context.Context, signature string, exp
 
 func (c *RPCClient) EscrowState(ctx context.Context, address string) (EscrowState, error) {
 	if !c.programOK {
-		return EscrowState{}, errors.New("PACT_SOLANA_PROGRAM_ID is not a valid Solana address")
+		return EscrowState{}, errors.New("SOLSTICE_SOLANA_PROGRAM_ID is not a valid Solana address")
 	}
 	key, err := solana.PublicKeyFromBase58(address)
 	if err != nil {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type ListingResponse } from '../../lib/api/client';
+import { api, imageSource, type ListingResponse } from '../../lib/api/client';
 import type { Listing } from '../../types/marketplace';
 import { mockListings } from './mockListings';
 
@@ -28,7 +28,7 @@ function presentListing(listing: ListingResponse, name: string): Listing {
     unit: listing.unit,
     inventory: listing.inventory_quantity,
     status: listing.status === 'active' || listing.status === 'paused' || listing.status === 'sold_out' ? listing.status : 'paused',
-    imageUrl: listing.image_url || fallbackImage,
+    imageUrl: listing.image_url ? imageSource(listing.image_url) : fallbackImage,
   };
 }
 

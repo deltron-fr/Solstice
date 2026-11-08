@@ -8,7 +8,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-pact_escrow = "GDSz1GPfxqK5yioYqQRbubENibvvaZDkkcRYDzkhzG4A"
+solstice_escrow = "GDSz1GPfxqK5yioYqQRbubENibvvaZDkkcRYDzkhzG4A"
+
+[programs.devnet]
+solstice_escrow = "GDSz1GPfxqK5yioYqQRbubENibvvaZDkkcRYDzkhzG4A"
 
 [registry]
 url = "https://api.apr.dev"

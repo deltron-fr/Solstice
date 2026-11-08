@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pact-marketplace/pact/backend/internal/data"
+	"github.com/deltron-fr/solstice/backend/internal/data"
 	solana "github.com/solana-foundation/solana-go/v2"
 )
 
@@ -47,7 +47,7 @@ func (s *Server) createChallenge(w http.ResponseWriter, r *http.Request) {
 	nonce := hex.EncodeToString(nonceBytes)
 	expires := time.Now().UTC().Add(s.config.ChallengeTTL)
 	origin := strings.TrimRight(r.Header.Get("Origin"), "/")
-	message := fmt.Sprintf("Pact wallet sign-in\nOrigin: %s\nWallet: %s\nNonce: %s\nIssued At: %s\nExpiration Time: %s\n", origin, walletAddress, nonce, time.Now().UTC().Format(time.RFC3339), expires.Format(time.RFC3339))
+	message := fmt.Sprintf("Solstice wallet sign-in\nOrigin: %s\nWallet: %s\nNonce: %s\nIssued At: %s\nExpiration Time: %s\n", origin, walletAddress, nonce, time.Now().UTC().Format(time.RFC3339), expires.Format(time.RFC3339))
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		s.internalError(w, "begin auth challenge", err)

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
-import { api } from '../../lib/api/client';
+import { api, imageSource } from '../../lib/api/client';
 import type { Listing } from '../../types/marketplace';
 import { mockListings } from '../marketplace/mockListings';
 import { formatListingPrice } from './formatPrice';
@@ -36,7 +36,7 @@ export function ListingDetailPage() {
           category: result.category, sellerName, location: result.location, price: result.price,
           currency: result.currency, unit: result.unit, inventory: result.inventory_quantity,
           status: result.status === 'active' || result.status === 'paused' || result.status === 'sold_out' ? result.status : 'paused',
-          imageUrl: result.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=85',
+          imageUrl: result.image_url ? imageSource(result.image_url) : 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=900&q=85',
         });
       })
       .catch(() => {
@@ -100,7 +100,7 @@ export function ListingDetailPage() {
       {!user && <p className="detail-note">Connect and sign in with a wallet to contact the seller or start an order.</p>}
       {ownListing && <p className="detail-note">This is your listing. Manage it from the seller dashboard.</p>}
       {error !== null && <p className="form-error" role="alert">{error}</p>}
-      <p className="detail-note">Marketplace details stay off-chain; Pact’s escrow contract secures eligible USDC orders.</p>
+      <p className="detail-note">Marketplace details stay off-chain; Solstice’s escrow contract secures eligible USDC orders.</p>
     </div>
   </section>;
 }

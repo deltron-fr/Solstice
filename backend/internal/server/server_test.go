@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pact-marketplace/pact/backend/internal/app"
-	"github.com/pact-marketplace/pact/backend/internal/blockchain"
-	"github.com/pact-marketplace/pact/backend/internal/config"
+	"github.com/deltron-fr/solstice/backend/internal/app"
+	"github.com/deltron-fr/solstice/backend/internal/blockchain"
+	"github.com/deltron-fr/solstice/backend/internal/config"
 	solana "github.com/solana-foundation/solana-go/v2"
 )
 
@@ -56,7 +56,7 @@ func newTestServer(t *testing.T, chain *fakeChain) (*Server, *sql.DB) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	cfg := config.Config{
-		CookieName: "pact_session", SessionTTL: time.Hour, ChallengeTTL: time.Minute,
+		CookieName: "solstice_session", SessionTTL: time.Hour, ChallengeTTL: time.Minute,
 		AllowedOrigins: []string{"http://localhost:5173"}, USDCMint: testUSDCMint,
 	}
 	return New(slog.New(slog.NewTextHandler(io.Discard, nil)), db, chain, cfg), db
@@ -99,7 +99,7 @@ func TestWalletAuthenticationAndReplayProtection(t *testing.T) {
 		t.Fatalf("verify status %d: %s", verifyResponse.Code, verifyResponse.Body.String())
 	}
 	cookie := verifyResponse.Result().Cookies()[0]
-	if !cookie.HttpOnly || cookie.Name != "pact_session" {
+	if !cookie.HttpOnly || cookie.Name != "solstice_session" {
 		t.Fatalf("unexpected session cookie: %#v", cookie)
 	}
 	protected := httptest.NewRequest(http.MethodPost, "/listings", strings.NewReader(`{"title":"Beans","price":1000000,"currency":"USDC","inventory_quantity":2}`))
@@ -337,6 +337,61 @@ func TestConversationMessagesAreParticipantOnly(t *testing.T) {
 	forbidden := serve(s, http.MethodGet, "/conversations/"+itoa(conversation.ID)+"/messages", "", strangerCookie)
 	if forbidden.Code != http.StatusNotFound {
 		t.Fatalf("non-participant read status = %d, want %d", forbidden.Code, http.StatusNotFound)
+	}
+}
+
+func TestConversationMessagesAreChronologicalAndPaginated(t *testing.T) {
+	s, _ := newTestServer(t, nil)
+	buyerCookie := createUserSession(t, s, "Message Buyer", "ordered-buyer@example.test")
+	sellerCookie := createUserSession(t, s, "Message Seller", "ordered-seller@example.test")
+	var sellerID int64
+	if err := s.db.QueryRow("SELECT id FROM users WHERE email = ?", "ordered-seller@example.test").Scan(&sellerID); err != nil {
+		t.Fatal(err)
+	}
+	created := serve(s, http.MethodPost, "/conversations", `{"seller_id":`+itoa(sellerID)+`}`, buyerCookie)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create conversation status %d: %s", created.Code, created.Body.String())
+	}
+	var conversation struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &conversation); err != nil {
+		t.Fatal(err)
+	}
+	for _, content := range []string{"First", "Second", "Third"} {
+		response := serve(s, http.MethodPost, "/conversations/"+itoa(conversation.ID)+"/messages", `{"content":"`+content+`"}`, buyerCookie)
+		if response.Code != http.StatusCreated {
+			t.Fatalf("create message %q status %d: %s", content, response.Code, response.Body.String())
+		}
+	}
+	readPage := func(path string) []int64 {
+		t.Helper()
+		response := serve(s, http.MethodGet, path, "", sellerCookie)
+		if response.Code != http.StatusOK {
+			t.Fatalf("list messages status %d: %s", response.Code, response.Body.String())
+		}
+		var body struct {
+			Messages []struct {
+				ID int64 `json:"id"`
+			} `json:"messages"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]int64, 0, len(body.Messages))
+		for _, message := range body.Messages {
+			ids = append(ids, message.ID)
+		}
+		return ids
+	}
+
+	latest := readPage("/conversations/" + itoa(conversation.ID) + "/messages?limit=2")
+	if len(latest) != 2 || latest[0] != 2 || latest[1] != 3 {
+		t.Fatalf("latest message IDs = %v, want chronological [2 3]", latest)
+	}
+	older := readPage("/conversations/" + itoa(conversation.ID) + "/messages?before_id=3&limit=2")
+	if len(older) != 2 || older[0] != 1 || older[1] != 2 {
+		t.Fatalf("older message IDs = %v, want chronological [1 2]", older)
 	}
 }
 

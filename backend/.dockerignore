@@ -1,0 +1,9 @@
+.git
+.env*
+bin/
+coverage.out
+var/
+*.db
+*.db-shm
+*.db-wal
+**/*_test.go

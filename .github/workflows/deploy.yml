@@ -1,0 +1,169 @@
+name: Test, publish, and deploy Solstice
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solstice-production
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    name: Test backend and frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: 1.27.3
+          cache-dependency-path: backend/go.sum
+
+      - name: Test backend
+        working-directory: backend
+        run: go test ./...
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.21.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check frontend
+        working-directory: frontend
+        run: npm run check
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  publish:
+    name: Build and publish Docker images
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate deployment variables
+        env:
+          SOLSTICE_DOMAIN: ${{ vars.SOLSTICE_DOMAIN }}
+          SOLSTICE_PROGRAM_ID: ${{ vars.SOLSTICE_SOLANA_PROGRAM_ID }}
+          SOLSTICE_USDC_MINT: ${{ vars.SOLSTICE_USDC_MINT }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KNOWN_HOSTS: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
+        run: |
+          test -n "$SOLSTICE_DOMAIN" || { echo "Missing repository variable SOLSTICE_DOMAIN" >&2; exit 1; }
+          test -n "$SOLSTICE_PROGRAM_ID" || { echo "Missing repository variable SOLSTICE_SOLANA_PROGRAM_ID" >&2; exit 1; }
+          test -n "$SOLSTICE_USDC_MINT" || { echo "Missing repository variable SOLSTICE_USDC_MINT" >&2; exit 1; }
+          test -n "$DOCKERHUB_TOKEN" || { echo "Missing repository secret DOCKERHUB_TOKEN" >&2; exit 1; }
+          test -n "$VM_HOST" || { echo "Missing repository secret VM_HOST" >&2; exit 1; }
+          test -n "$VM_USER" || { echo "Missing repository secret VM_USER" >&2; exit 1; }
+          test -n "$VM_SSH_KEY" || { echo "Missing repository secret VM_SSH_KEY" >&2; exit 1; }
+          test -n "$VM_SSH_KNOWN_HOSTS" || { echo "Missing repository secret VM_SSH_KNOWN_HOSTS" >&2; exit 1; }
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: deltronfr
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          platforms: linux/amd64
+          push: true
+          tags: |
+            deltronfr/solstice:backend-main
+            deltronfr/solstice:backend-${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=/api
+            VITE_SOLANA_RPC_URL=/solana-rpc
+            VITE_SOLANA_CLUSTER=devnet
+            VITE_SOLANA_PROGRAM_ID=${{ vars.SOLSTICE_SOLANA_PROGRAM_ID }}
+            VITE_SOLANA_USDC_MINT=${{ vars.SOLSTICE_USDC_MINT }}
+          tags: |
+            deltronfr/solstice:frontend-main
+            deltronfr/solstice:frontend-${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  deploy:
+    name: Deploy to VM
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure SSH
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KNOWN_HOSTS: ${{ secrets.VM_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/solstice-ssh"
+          printf '%s\n' "$VM_SSH_KEY" > "$RUNNER_TEMP/solstice-ssh/deploy_key"
+          chmod 600 "$RUNNER_TEMP/solstice-ssh/deploy_key"
+          printf '%s\n' "$VM_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/solstice-ssh/known_hosts"
+
+      - name: Copy Compose manifest and deploy script
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+        run: |
+          scp -i "$RUNNER_TEMP/solstice-ssh/deploy_key" \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/solstice-ssh/known_hosts" \
+            -o StrictHostKeyChecking=yes \
+            compose.yaml deploy/deploy.sh "$VM_USER@$VM_HOST:/opt/solstice/"
+
+      - name: Pull and start the release
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USER: ${{ secrets.VM_USER }}
+          SOLSTICE_PROGRAM_ID: ${{ vars.SOLSTICE_SOLANA_PROGRAM_ID }}
+          SOLSTICE_USDC_MINT: ${{ vars.SOLSTICE_USDC_MINT }}
+          SOLSTICE_DOMAIN: ${{ vars.SOLSTICE_DOMAIN }}
+        run: |
+          ssh -i "$RUNNER_TEMP/solstice-ssh/deploy_key" \
+            -o IdentitiesOnly=yes \
+            -o UserKnownHostsFile="$RUNNER_TEMP/solstice-ssh/known_hosts" \
+            -o StrictHostKeyChecking=yes \
+            "$VM_USER@$VM_HOST" \
+            "sh /opt/solstice/deploy.sh '$SOLSTICE_PROGRAM_ID' '$SOLSTICE_USDC_MINT' '$SOLSTICE_DOMAIN'"
+
+      - name: Check public health endpoint
+        env:
+          SOLSTICE_DOMAIN: ${{ vars.SOLSTICE_DOMAIN }}
+        run: |
+          curl --fail --silent --show-error \
+            --retry 12 --retry-delay 5 --retry-all-errors \
+            "https://$SOLSTICE_DOMAIN/api/health"

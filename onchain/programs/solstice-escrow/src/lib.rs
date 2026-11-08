@@ -10,7 +10,7 @@ pub const FUNDING_WINDOW_SECONDS: i64 = 30 * 60;
 pub const FULFILLMENT_WINDOW_SECONDS: i64 = 7 * 24 * 60 * 60;
 
 #[program]
-pub mod pact_escrow {
+pub mod solstice_escrow {
     use super::*;
 
     /// Creates the singleton config PDA. The accepted mint is selected during setup.

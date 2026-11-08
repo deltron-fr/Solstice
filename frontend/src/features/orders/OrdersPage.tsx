@@ -59,12 +59,12 @@ function PaymentAction({ row, connected, buyerAddress, sellerAddress, onComplete
         const result = await api.submitPaymentTransaction(row.order.id, action, signature);
         setStatus(result.status === 'finalized'
           ? 'Escrow transaction finalized and verified.'
-          : `Transaction ${result.status}; Pact will verify it against Solana RPC.`);
+          : `Transaction ${result.status}; Solstice will verify it against Solana RPC.`);
       } catch (reason) {
         if (reason instanceof ApiRequestError && reason.status === 503) {
           setStatus(`Transaction sent (${signature}); backend verification is temporarily unavailable and will retry.`);
         } else {
-          throw new Error(`Transaction sent as ${signature}, but Pact could not record the signature: ${reason instanceof Error ? reason.message : 'API error'}`);
+          throw new Error(`Transaction sent as ${signature}, but Solstice could not record the signature: ${reason instanceof Error ? reason.message : 'API error'}`);
         }
       }
       onComplete();
@@ -75,9 +75,9 @@ function PaymentAction({ row, connected, buyerAddress, sellerAddress, onComplete
 
   return <div className="payment-actions">
     {row.order.status === 'pending_payment' && row.payment?.escrow_state?.status !== 'funded' && <button className="button button-dark" type="button" disabled={working || row.payment === null} onClick={() => { void run('fund'); }}>{working ? phase || 'Processing payment…' : 'Pay securely with USDC'}</button>}
-    {row.order.status === 'pending_payment' && row.payment?.escrow_state?.status === 'funded' && <p className="detail-note">Payment is secured on-chain; Pact is updating the order status.</p>}
+    {row.order.status === 'pending_payment' && row.payment?.escrow_state?.status === 'funded' && <p className="detail-note">Payment is secured on-chain; Solstice is updating the order status.</p>}
     {row.order.status === 'fulfilling' && row.payment?.escrow_state?.status === 'funded' && <button className="button button-dark" type="button" disabled={working} onClick={() => { void run('release'); }}>{working ? phase || 'Processing transaction…' : 'Confirm receipt & release'}</button>}
-    {row.order.status === 'fulfilling' && row.payment?.escrow_state?.status !== 'funded' && <p className="detail-note">Pact is refreshing escrow state before enabling release.</p>}
+    {row.order.status === 'fulfilling' && row.payment?.escrow_state?.status !== 'funded' && <p className="detail-note">Solstice is refreshing escrow state before enabling release.</p>}
     {row.payment?.escrow_state?.status === 'funded' && row.payment.escrow_state.expires_at <= Math.floor(Date.now() / 1000) && <button className="button button-outline" type="button" disabled={working} onClick={() => { void run('refund'); }}>{working ? phase || 'Processing transaction…' : 'Refund after timeout'}</button>}
     {error !== null && <p className="form-error" role="alert">{error}</p>}
     {status !== null && <p className="success-notice" role="status">{status}</p>}
@@ -148,7 +148,7 @@ export function OrdersPage() {
       return <article className={`order-card${focusOrder === order.id ? ' order-card-focus' : ''}`} key={order.id}>
         <div className="order-card-top"><div><p className="eyebrow">ORDER #{order.id}</p><h2>{row.listing?.title ?? `Listing #${order.listing_id}`}</h2></div><span className={`status-pill status-${order.status}`}>{order.status.replaceAll('_', ' ')}</span></div>
         <dl className="order-facts"><div><dt>{role === 'buyer' ? 'Seller' : 'Buyer'}</dt><dd>{row.counterpartyName ?? `Account #${counterpartyId}`}</dd></div><div><dt>Quantity</dt><dd>{order.quantity}</dd></div><div><dt>Total</dt><dd>{formatUsdc(order.total_amount)}</dd></div><div><dt>Created</dt><dd>{dateLabel(order.created_at)}</dd></div></dl>
-        <div className="escrow-summary"><strong>On-chain escrow</strong><span>{chainState?.status ?? 'Not yet observed by Pact RPC'}</span><span>Funding deadline: {payment ? dateLabel(payment.funding_expires_at) : 'unavailable'}</span><span>Vault balance: {chainState ? formatUsdc(chainState.vault_amount) : 'unknown'}</span>{payment?.escrow_pda_address && <code>{payment.escrow_pda_address}</code>}</div>
+        <div className="escrow-summary"><strong>On-chain escrow</strong><span>{chainState?.status ?? 'Not yet observed by Solstice RPC'}</span><span>Funding deadline: {payment ? dateLabel(payment.funding_expires_at) : 'unavailable'}</span><span>Vault balance: {chainState ? formatUsdc(chainState.vault_amount) : 'unknown'}</span>{payment?.escrow_pda_address && <code>{payment.escrow_pda_address}</code>}</div>
         {role === 'seller' && order.status === 'paid' && <button className="button button-dark" type="button" disabled={busyOrder === order.id} onClick={() => { void markFulfilling(order.id); }}>{busyOrder === order.id ? 'Updating…' : 'Mark as fulfilling'}</button>}
         {role === 'buyer' && (order.status === 'pending_payment' || order.status === 'paid' || order.status === 'fulfilling') && payment && row.payment && user.wallet_address && row.sellerWallet && connected && <PaymentAction row={row} connected={connected} buyerAddress={user.wallet_address} sellerAddress={row.sellerWallet} onComplete={() => { void refresh(); }} />}
         {role === 'buyer' && (order.status === 'pending_payment' || order.status === 'paid' || order.status === 'fulfilling') && connected === null && <p className="detail-note">Connect the buyer wallet to sign an escrow transaction.</p>}

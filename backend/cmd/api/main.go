@@ -10,15 +10,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/pact-marketplace/pact/backend/internal/app"
-	"github.com/pact-marketplace/pact/backend/internal/blockchain"
-	"github.com/pact-marketplace/pact/backend/internal/config"
-	"github.com/pact-marketplace/pact/backend/internal/server"
+	"github.com/deltron-fr/solstice/backend/internal/app"
+	"github.com/deltron-fr/solstice/backend/internal/blockchain"
+	"github.com/deltron-fr/solstice/backend/internal/config"
+	"github.com/deltron-fr/solstice/backend/internal/server"
 )
 
 func main() {
 	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if err := os.MkdirAll(cfg.UploadDir, 0o750); err != nil {
+		logger.Error("create image upload directory failed", "directory", cfg.UploadDir, "error", err)
+		os.Exit(1)
+	}
 	db, err := app.OpenDatabase(cfg.DatabaseDSN)
 	if err != nil {
 		logger.Error("database initialization failed", "error", err)

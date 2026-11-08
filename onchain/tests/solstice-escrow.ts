@@ -11,10 +11,10 @@ import {
 } from '@solana/spl-token';
 import { assert, expect } from 'chai';
 
-describe('pact-escrow scaffold', () => {
+describe('solstice-escrow scaffold', () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
-  const program = anchor.workspace.PactEscrow;
+  const program = anchor.workspace.SolsticeEscrow;
   let acceptedMint: anchor.web3.PublicKey;
   let config: anchor.web3.PublicKey;
 

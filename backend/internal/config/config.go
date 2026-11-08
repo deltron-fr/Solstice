@@ -19,21 +19,23 @@ type Config struct {
 	SessionTTL      time.Duration
 	ChallengeTTL    time.Duration
 	ReconcileEvery  time.Duration
+	UploadDir       string
 }
 
 func Load() Config {
 	return Config{
-		HTTPAddr:        value("PACT_HTTP_ADDR", ":8080"),
-		DatabaseDSN:     value("PACT_DATABASE_DSN", "file:pact.db"),
-		SolanaRPCURL:    value("PACT_SOLANA_RPC_URL", "http://127.0.0.1:8899"),
-		SolanaProgramID: os.Getenv("PACT_SOLANA_PROGRAM_ID"),
-		USDCMint:        os.Getenv("PACT_USDC_MINT"),
-		AllowedOrigins:  csv("PACT_ALLOWED_ORIGINS", "http://localhost:5173"),
-		CookieName:      value("PACT_SESSION_COOKIE", "pact_session"),
-		CookieSecure:    boolValue("PACT_COOKIE_SECURE", false),
-		SessionTTL:      durationValue("PACT_SESSION_TTL", 7*24*time.Hour),
-		ChallengeTTL:    durationValue("PACT_CHALLENGE_TTL", 5*time.Minute),
-		ReconcileEvery:  durationValue("PACT_RECONCILE_INTERVAL", 15*time.Second),
+		HTTPAddr:        value("SOLSTICE_HTTP_ADDR", ":8080"),
+		DatabaseDSN:     value("SOLSTICE_DATABASE_DSN", "file:solstice.db"),
+		SolanaRPCURL:    value("SOLSTICE_SOLANA_RPC_URL", "http://127.0.0.1:8899"),
+		SolanaProgramID: os.Getenv("SOLSTICE_SOLANA_PROGRAM_ID"),
+		USDCMint:        os.Getenv("SOLSTICE_USDC_MINT"),
+		AllowedOrigins:  csv("SOLSTICE_ALLOWED_ORIGINS", "http://localhost:5173"),
+		CookieName:      value("SOLSTICE_SESSION_COOKIE", "solstice_session"),
+		CookieSecure:    boolValue("SOLSTICE_COOKIE_SECURE", false),
+		SessionTTL:      durationValue("SOLSTICE_SESSION_TTL", 7*24*time.Hour),
+		ChallengeTTL:    durationValue("SOLSTICE_CHALLENGE_TTL", 5*time.Minute),
+		ReconcileEvery:  durationValue("SOLSTICE_RECONCILE_INTERVAL", 15*time.Second),
+		UploadDir:       value("SOLSTICE_UPLOAD_DIR", "var/uploads"),
 	}
 }
 

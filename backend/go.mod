@@ -1,4 +1,4 @@
-module github.com/pact-marketplace/pact/backend
+module github.com/deltron-fr/solstice/backend
 
 go 1.27.0
 

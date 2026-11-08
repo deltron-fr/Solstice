@@ -7,13 +7,14 @@ backend-test:
 	cd backend && go test ./...
 
 backend-build:
-	cd backend && mkdir -p bin && go build -buildvcs=false -o bin/pact-api ./cmd/api
+	cd backend && mkdir -p bin && go build -buildvcs=false -o bin/solstice-api ./cmd/api
 
 sqlc:
 	cd backend && sqlc generate
 
+
 migrate-up:
-	cd backend && goose -dir migrations sqlite3 "$${PACT_DATABASE_DSN:-file:pact.db}" up
+	cd backend && goose -dir migrations sqlite3 "$${SOLSTICE_DATABASE_DSN:-file:solstice.db}" up
 
 frontend-dev:
 	cd frontend && npm run dev

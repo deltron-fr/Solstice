@@ -62,7 +62,7 @@ export function WalletButton() {
         {showSignIn && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowSignIn(false); }}>
           <form className="dialog-card" onSubmit={(event) => { void handleSignIn(event); }}>
             <button className="dialog-close" type="button" aria-label="Close" onClick={() => setShowSignIn(false)}>×</button>
-            <p className="eyebrow">WELCOME TO PACT</p>
+            <p className="eyebrow">WELCOME TO SOLSTICE</p>
             <h2>Sign in with your wallet</h2>
             <p className="form-help">We’ll ask your wallet to sign a one-time message. Your private keys stay in your wallet.</p>
             <label>Your name<input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} required maxLength={120} /></label>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
-import { api, type ListingCurrency, type ListingResponse } from '../../lib/api/client';
+import { api, imageSource, type ListingCurrency, type ListingResponse } from '../../lib/api/client';
 import { formatListingPrice } from '../listings/formatPrice';
 
 const emptyDraft = {
@@ -13,6 +13,8 @@ export function SellerPage() {
   const { user } = useAuth();
   const [listings, setListings] = useState<ListingResponse[]>([]);
   const [draft, setDraft] = useState(emptyDraft);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageInputKey, setImageInputKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,8 +38,11 @@ export function SellerPage() {
       if (enteredDecimals > maxDecimals || !Number.isFinite(price) || !Number.isSafeInteger(Math.round(price)) || price <= 0) {
         throw new Error(`Enter a positive price with at most ${maxDecimals} decimal places.`);
       }
-      await api.createListing({ ...draft, price: Math.round(price) });
+      const imageUrl = imageFile === null ? '' : (await api.uploadImage(imageFile)).image_url;
+      await api.createListing({ ...draft, image_url: imageUrl, price: Math.round(price) });
       setDraft(emptyDraft);
+      setImageFile(null);
+      setImageInputKey((key) => key + 1);
       setNotice('Your listing is live in the marketplace.');
       await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not create the listing.'); }
@@ -52,7 +57,7 @@ export function SellerPage() {
     finally { setBusy(false); }
   }
 
-  if (user === null) return <section className="seller-placeholder page-section"><span className="large-symbol">✳</span><p className="eyebrow">SELL ON PACT</p><h1>Your business belongs here.</h1><p>Connect and sign in with your Solana wallet to publish listings and manage orders.</p><Link className="button button-dark" to="/listings">Explore the marketplace</Link></section>;
+  if (user === null) return <section className="seller-placeholder page-section"><span className="large-symbol">✳</span><p className="eyebrow">SELL ON SOLSTICE</p><h1>Your business belongs here.</h1><p>Connect and sign in with your Solana wallet to publish listings and manage orders.</p><Link className="button button-dark" to="/listings">Explore the marketplace</Link></section>;
 
   return <section className="page-section seller-dashboard">
     <div className="section-heading"><div><p className="eyebrow">SELLER DASHBOARD</p><h1>Welcome, {user.name}.</h1><p className="page-intro">Publish the goods and services your business is proud to offer.</p></div><Link className="button button-outline" to="/orders?as=seller">View seller orders</Link></div>
@@ -64,14 +69,15 @@ export function SellerPage() {
         <div className="form-row"><label>Category<input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} required maxLength={80} /></label><label>Unit<input value={draft.unit} onChange={(event) => setDraft({ ...draft, unit: event.target.value })} required maxLength={60} /></label></div>
         <div className="form-row"><label>Price<input type="number" min="0.01" step={draft.currency === 'USDC' ? '0.000001' : '0.01'} value={draft.price} onChange={(event) => setDraft({ ...draft, price: event.target.value })} required /><small>Enter major units. Stored as kobo, cents, or micro-USDC.</small></label><label>Currency<select value={draft.currency} onChange={(event) => { const value = event.target.value; if (value === 'USDC' || value === 'NGN' || value === 'USD') setDraft({ ...draft, currency: value }); }}><option value="USDC">USDC · escrow eligible</option><option value="NGN">NGN · agreement only</option><option value="USD">USD · agreement only</option></select></label></div>
         <div className="form-row"><label>Available quantity<input type="number" min={0} step={1} value={draft.inventory_quantity} onChange={(event) => setDraft({ ...draft, inventory_quantity: Number(event.target.value) })} required /></label><label>Location<input value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} maxLength={160} placeholder="City, country" /></label></div>
-        <label>Image URL<input type="url" value={draft.image_url} onChange={(event) => setDraft({ ...draft, image_url: event.target.value })} placeholder="https://…" /></label>
+        <label>Listing image<input key={imageInputKey} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} /><small>JPEG, PNG, or WebP · up to 5 MB · stored on this server</small></label>
+        {imageFile !== null && <p className="detail-note">Selected image: {imageFile.name}</p>}
         {error !== null && <p className="form-error" role="alert">{error}</p>}{notice !== null && <p className="success-notice" role="status">{notice}</p>}
         <button className="button button-dark" type="submit" disabled={busy}>{busy ? 'Publishing…' : 'Publish listing'}</button>
       </form>
       <div className="seller-listings">
         <h2>Your listings <span>{listings.length}</span></h2>
         {loading ? <p className="loading-state">Loading your listings…</p> : listings.length === 0 ? <div className="empty-state"><p>Your storefront is ready when you are.</p><span>Listings you publish will appear here.</span></div> : listings.map((listing) => <article className="seller-listing-row" key={listing.id}>
-          {listing.image_url ? <img src={listing.image_url} alt="" /> : <div className="seller-listing-placeholder">✳</div>}
+          {listing.image_url ? <img src={imageSource(listing.image_url)} alt="" /> : <div className="seller-listing-placeholder">✳</div>}
           <div className="seller-listing-copy"><Link to={`/listings/${listing.id}`}><strong>{listing.title}</strong></Link><span>{formatListingPrice(listing.price, listing.currency)} / {listing.unit} · {listing.inventory_quantity} available</span><small className={`status-pill status-${listing.status}`}>{listing.status.replace('_', ' ')}</small></div>
           <button className="button button-quiet" type="button" disabled={busy} onClick={() => { void updateStatus(listing); }}>{listing.status === 'active' ? 'Pause' : 'Activate'}</button>
         </article>)}

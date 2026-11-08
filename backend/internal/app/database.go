@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/deltron-fr/solstice/backend/migrations"
 	_ "github.com/ncruces/go-sqlite3/driver"
-	"github.com/pact-marketplace/pact/backend/migrations"
 	"github.com/pressly/goose/v3"
 )
 

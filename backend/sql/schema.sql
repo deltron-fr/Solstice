@@ -15,7 +15,7 @@ CREATE TABLE listings (
     category TEXT NOT NULL DEFAULT 'General' CHECK (length(trim(category)) BETWEEN 1 AND 80),
     unit TEXT NOT NULL DEFAULT 'item' CHECK (length(trim(unit)) BETWEEN 1 AND 60),
     location TEXT NOT NULL DEFAULT '' CHECK (length(location) <= 160),
-    image_url TEXT NOT NULL DEFAULT '' CHECK (image_url = '' OR image_url LIKE 'https://%'),
+    image_url TEXT NOT NULL DEFAULT '' CHECK (image_url = '' OR image_url LIKE 'https://%' OR image_url LIKE '/uploads/%'),
     inventory_quantity INTEGER NOT NULL DEFAULT 0 CHECK (inventory_quantity >= 0),
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused', 'sold_out', 'archived')),
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),

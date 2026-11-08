@@ -25,7 +25,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       .then((current) => { if (active) setUser(current); })
       .catch((error: unknown) => {
         if (active && !(error instanceof ApiRequestError && error.status === 401)) {
-          console.error('Could not restore the Pact session', error);
+          console.error('Could not restore the Solstice session', error);
         }
       })
       .finally(() => { if (active) setLoading(false); });

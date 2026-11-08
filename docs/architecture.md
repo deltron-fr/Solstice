@@ -1,4 +1,4 @@
-# Pact architecture
+# Solstice architecture
 
 ## Ownership boundaries
 

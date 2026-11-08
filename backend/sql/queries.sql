@@ -155,8 +155,12 @@ VALUES (?, ?, ?)
 RETURNING id, conversation_id, sender_id, content, created_at;
 
 -- name: ListMessages :many
-SELECT id, conversation_id, sender_id, content, created_at FROM messages
-WHERE conversation_id = ? AND id < ? ORDER BY id DESC LIMIT ?;
+SELECT id, conversation_id, sender_id, content, created_at
+FROM (
+    SELECT id, conversation_id, sender_id, content, created_at FROM messages
+    WHERE conversation_id = ? AND id < ? ORDER BY id DESC LIMIT ?
+)
+ORDER BY id ASC;
 
 -- name: CreateAuthChallenge :one
 INSERT INTO auth_challenges (wallet_address, nonce, message, expires_at)

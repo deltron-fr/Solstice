@@ -2,9 +2,9 @@ import * as anchor from '@anchor-lang/core';
 import { getMint, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 async function initializeDevnetConfig(): Promise<void> {
-  const mintAddress = process.env.PACT_USDC_MINT?.trim();
+  const mintAddress = process.env.SOLSTICE_USDC_MINT?.trim();
   if (!mintAddress) {
-    throw new Error('Set PACT_USDC_MINT to the address of your devnet test mint.');
+    throw new Error('Set SOLSTICE_USDC_MINT to the address of your devnet test mint.');
   }
 
   const provider = anchor.AnchorProvider.env();
@@ -20,7 +20,7 @@ async function initializeDevnetConfig(): Promise<void> {
   }
 
   anchor.setProvider(provider);
-  const program = anchor.workspace.PactEscrow;
+  const program = anchor.workspace.SolsticeEscrow;
   const [config] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from('marketplace_config')],
     program.programId,

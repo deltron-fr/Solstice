@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/pact-marketplace/pact/backend/internal/data"
+	"github.com/deltron-fr/solstice/backend/internal/data"
 )
 
 type createConversationRequest struct {

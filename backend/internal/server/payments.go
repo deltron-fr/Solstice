@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pact-marketplace/pact/backend/internal/blockchain"
-	"github.com/pact-marketplace/pact/backend/internal/data"
+	"github.com/deltron-fr/solstice/backend/internal/blockchain"
+	"github.com/deltron-fr/solstice/backend/internal/data"
 	solana "github.com/solana-foundation/solana-go/v2"
 )
 

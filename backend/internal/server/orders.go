@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pact-marketplace/pact/backend/internal/blockchain"
-	"github.com/pact-marketplace/pact/backend/internal/data"
+	"github.com/deltron-fr/solstice/backend/internal/blockchain"
+	"github.com/deltron-fr/solstice/backend/internal/data"
 	solana "github.com/solana-foundation/solana-go/v2"
 )
 
@@ -54,11 +54,11 @@ func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(s.config.USDCMint) == "" {
-		writeError(w, http.StatusServiceUnavailable, "payments_not_configured", "PACT_USDC_MINT must be configured before escrow-backed orders are available")
+		writeError(w, http.StatusServiceUnavailable, "payments_not_configured", "SOLSTICE_USDC_MINT must be configured before escrow-backed orders are available")
 		return
 	}
 	if _, err := solana.PublicKeyFromBase58(s.config.USDCMint); err != nil {
-		writeError(w, http.StatusServiceUnavailable, "payments_not_configured", "PACT_USDC_MINT is not a valid Solana address")
+		writeError(w, http.StatusServiceUnavailable, "payments_not_configured", "SOLSTICE_USDC_MINT is not a valid Solana address")
 		return
 	}
 	tx, err := s.db.BeginTx(r.Context(), nil)

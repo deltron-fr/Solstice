@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { api, type ConversationResponse, type MessageResponse, type PublicUserResponse } from '../../lib/api/client';
+import { shouldSendMessageOnEnter, sortMessagesChronologically } from './messageUtils';
 
 interface ConversationRow {
   conversation: ConversationResponse;
@@ -15,6 +16,7 @@ export function InboxPage() {
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [messages, setMessages] = useState<MessageResponse[]>([]);
   const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +41,7 @@ export function InboxPage() {
 
   const loadMessages = useCallback(async () => {
     if (!Number.isSafeInteger(selectedId) || selectedId < 1) { setMessages([]); return; }
-    try { setMessages((await api.listMessages(selectedId)).messages); }
+    try { setMessages(sortMessagesChronologically((await api.listMessages(selectedId)).messages)); }
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not load messages.'); }
   }, [selectedId]);
 
@@ -48,12 +50,20 @@ export function InboxPage() {
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (draft.trim() === '' || selectedId < 1) return;
+    if (sending || draft.trim() === '' || !Number.isSafeInteger(selectedId) || selectedId < 1) return;
+    setSending(true);
     try {
       const message = await api.sendMessage(selectedId, draft);
-      setMessages((current) => [...current, message]);
+      setMessages((current) => sortMessagesChronologically([...current, message]));
       setDraft(''); setError(null);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not send message.'); }
+    finally { setSending(false); }
+  }
+
+  function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (!shouldSendMessageOnEnter(event.key, event.shiftKey, event.nativeEvent.isComposing)) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
   }
 
   if (user === null) return <section className="seller-placeholder page-section"><span className="large-symbol">✉</span><p className="eyebrow">MESSAGES</p><h1>Good deals start with a conversation.</h1><p>Sign in with your wallet to contact sellers and keep your conversations together.</p><Link className="button button-dark" to="/listings">Explore listings</Link></section>;
@@ -75,7 +85,7 @@ export function InboxPage() {
         {activeConversation ? <>
           <div className="message-panel-heading"><strong>Conversation #{activeConversation.id}</strong>{activeConversation.order_id !== null && <Link to={`/orders?order=${activeConversation.order_id}`}>Order #{activeConversation.order_id}</Link>}</div>
           <div className="message-list">{messages.length === 0 ? <p className="empty-state">No messages yet. Say hello to get the conversation started.</p> : messages.map((message) => <article className={`message-bubble${message.sender_id === user.id ? ' own-message' : ''}`} key={message.id}><p>{message.content}</p><time>{new Date(message.created_at).toLocaleString()}</time></article>)}</div>
-          <form className="message-compose" onSubmit={(event) => { void sendMessage(event); }}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={2} maxLength={4000} placeholder="Write a message…" required /><button className="button button-dark" type="submit" disabled={draft.trim() === ''}>Send</button></form>
+          <form className="message-compose" onSubmit={(event) => { void sendMessage(event); }}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleComposerKeyDown} rows={2} maxLength={4000} placeholder="Write a message… (Enter to send, Shift+Enter for a new line)" required /><button className="button button-dark" type="submit" disabled={sending || draft.trim() === ''}>{sending ? 'Sending…' : 'Send'}</button></form>
         </> : <p className="empty-state">Choose a conversation to read and reply.</p>}
       </div>
     </div>}
